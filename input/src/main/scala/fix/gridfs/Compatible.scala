@@ -1,7 +1,7 @@
 /*
 rule = ReactiveMongoUpgrade
 */
-package fix
+package fix.gridfs
 
 import scala.concurrent.ExecutionContext
 
@@ -10,7 +10,7 @@ import reactivemongo.bson.BSONValue
 import reactivemongo.api.{ BSONSerializationPack, DefaultDB }
 import reactivemongo.api.gridfs.{ GridFS, ReadFile }
 
-object GridFSUsage {
+object Compatible {
   def resolve1(db: DefaultDB) =
     GridFS[BSONSerializationPack.type](db)
 
@@ -19,12 +19,8 @@ object GridFSUsage {
 
   // ---
 
-  // TODO: import reactivemongo.bson
-  // TODO: import reactivemongo.api.BSONSerialization =>
-
   def remove(
     gridfs: GridFS[BSONSerializationPack.type],
     file: ReadFile[BSONSerializationPack.type, BSONValue])(implicit ec: ExecutionContext) =
     gridfs.remove(file)
-
 }

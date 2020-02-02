@@ -54,3 +54,14 @@ scalacOptions in (Compile, console) ~= {
 scalacOptions in (Test, console) ~= {
   _.filterNot { opt => opt.startsWith("-X") || opt.startsWith("-Y") }
 }
+
+ThisBuild / libraryDependencies ++= {
+  val silencerVersion = "1.4.4"
+
+  Seq(
+    compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).
+      cross(CrossVersion.full)),
+    ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).
+      cross(CrossVersion.full)
+  )
+}
