@@ -6,8 +6,7 @@ import scala.meta._
 class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
   override def fix(implicit doc: SemanticDocument): Patch = {
     val transformer: PartialFunction[Tree, Patch] =
-      gridfsUpgrade orElse bsonUpgrade orElse {
-
+      gridfsUpgrade orElse bsonUpgrade orElse playUpgrade orElse {
         case _ =>
           //println(s"x = ${x.structure}")
           Patch.empty
@@ -18,17 +17,36 @@ class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
 
   // ---
 
-  /* TODO: play.modules.reactivemongo/MongoController
+  private def playUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
+    case i @ Importer(
+      Term.Name("MongoController"),
+      List(Importee.Name(Name.Indeterminate("JsGridFS")))
+      ) => Patch.replaceTree(i, "MongoController.GridFS")
 
-  def gridFSBodyParser(gfs: Future[JsGridFS])(implicit @deprecated("Unused", "0.19.0") readFileReader: Reads[JsReadFile[JsValue]] = null.asInstanceOf[Reads[JsReadFile[JsValue]]], materializer: Materializer): JsGridFSBodyParser[JsValue] = parser(gfs, { (n, t) => gfs.fileToSave(Some(n), t) })(materializer)
+    case n @ Type.Name("JsGridFS") =>
+      Patch.replaceTree(n, "GridFS")
 
-  @deprecated("Use `gridFSBodyParser` without `ir`", "0.17.0")
-  def gridFSBodyParser[Id <: JsValue](gfs: Future[JsGridFS], fileToSave: (String, Option[String]) => JsFileToSave[Id])(implicit readFileReader: Reads[JsReadFile[Id]], materializer: Materializer, ir: Reads[Id]): JsGridFSBodyParser[Id] = parser(gfs, fileToSave)
+    case p @ Term.Apply(
+      Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _),
+      _ :: _ :: mat :: Nil) => {
+      if (gfs.symbol.info.map(
+        _.signature.toString).exists(_ startsWith "Future[")) {
+        Patch.replaceTree(p, s"""gridFSBodyParser($gfs)($mat)""")
+      } else {
+        Patch.replaceTree(
+          p, s"""gridFSBodyParser(Future.successful($gfs))($mat)""")
+      }
+    }
 
-  def gridFSBodyParser[Id <: JsValue](gfs: Future[JsGridFS], fileToSave: (String, Option[String]) => JsFileToSave[Id])(implicit @deprecated("Unused", "0.19.0") readFileReader: Reads[JsReadFile[Id]], materializer: Materializer): JsGridFSBodyParser[Id] = parser(gfs, fileToSave)
-   */
+    case p @ Term.Apply(
+      Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _ :: _),
+      _ :: _ :: mat :: _ :: Nil) =>
+      Patch.replaceTree(
+        p, s"""gridFSBodyParser(Future.successful($gfs))($mat)""")
 
-  private val bsonUpgrade: PartialFunction[Tree, Patch] = {
+  }
+
+  def bsonUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
     case i @ Importer(
       Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
       _
@@ -58,6 +76,69 @@ import ${Importer(s, is).syntax}"""
 
       Patch.replaceTree(i, up)
     }
+
+    case t @ Type.Select(
+      Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+      Type.Name(n)
+      ) =>
+      Patch.replaceTree(t, s"reactivemongo.api.bson.$n")
+
+    case t @ Term.Select(
+      Term.Select(
+        Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
+        Term.Name("collections")
+        ),
+      Term.Name("bson")
+      ) => Patch.replaceTree(t, s"reactivemongo.api.bson.collection")
+
+    case v @ Term.Apply(Term.Select(
+      Term.Apply(
+        Term.ApplyType(
+          Term.Select(d @ Term.Name(n), Term.Name("getAs")),
+          List(t @ Type.Name("BSONNumberLike" | "BSONBooleanLike"))
+          ),
+        List(f)
+        ),
+      Term.Name("map")
+      ),
+      List(body)
+      ) if (d.symbol.info.exists { s =>
+      val t = s.signature.toString
+      t == "BSONDocument" || t == "BSONArray"
+    }) => {
+      val b = body match {
+        case Term.Select(_: Term.Placeholder, expr) =>
+          s"_.${expr.syntax}.toOption"
+
+        case Term.Block(List(Term.Function(List(param), b))) =>
+          s"${param.syntax} => (${b.syntax}).toOption"
+
+        case _ =>
+          body.syntax
+      }
+
+      Patch.replaceTree(v, s"${n}.getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")
+    }
+
+    case getAs @ Term.Apply(
+      Term.ApplyType(
+        Term.Select(x @ Term.Name(a), Term.Name("getAs")),
+        List(Type.Name(t))
+        ),
+      List(f)
+      ) if (t != "BSONNumberLike" && t != "BSONBooleanLike" &&
+      x.symbol.info.exists { i =>
+        val s = i.signature.toString
+
+        s == "BSONDocument" || s == "BSONArray"
+      }) =>
+      Patch.replaceTree(getAs, s"${a}.getAsOpt[${t}]($f)")
+
+    case u @ Term.Apply(
+      Term.Select(x @ Term.Name(a), Term.Name("getUnflattenedTry")),
+      List(f)
+      ) if (x.symbol.info.exists(_.signature.toString == "BSONDocument")) =>
+      Patch.replaceTree(u, s"${a}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
   }
 
   private def gridfsUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {

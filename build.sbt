@@ -19,15 +19,39 @@ lazy val rules = project.in(file("rules")).settings(
 )
 
 lazy val input = project.in(file("input")).settings(
-  libraryDependencies ++= Seq(
-    organization.value %% "reactivemongo" % "0.12.7" % Provided),
+  libraryDependencies ++= {
+    val previousVer = "0.12.7"
+
+    val deps = Seq[(String, String)](
+      "reactivemongo" -> previousVer,
+      "play2-reactivemongo" -> s"${previousVer}-play26").map {
+      case (nme, ver) => organization.value %% nme % ver % Provided
+    }
+
+    deps ++: Seq(
+      "com.typesafe.play" %% "play" % "2.6.6" % Provided)
+  },
   skip in publish := true
 )
 
 lazy val output = project.in(file("output")).settings(
   skip in publish := true,
-  libraryDependencies ++= Seq(
-    organization.value %% "reactivemongo" % "1.0.0-rc.1-SNAPSHOT" % Provided)
+  sources in Compile ~= {
+    _.filterNot(_.getName endsWith "RequireMigration.scala")
+  },
+  libraryDependencies ++= {
+    val latestVer = "1.0.0-rc.1-SNAPSHOT"
+
+    val deps = Seq[(String, String)](
+      "reactivemongo" -> latestVer,
+      "play2-reactivemongo" -> "1.0.0-rc.1-play28-SNAPSHOT").map {
+      case (nme, ver) => organization.value %% nme % ver % Provided
+    }
+
+    deps ++: Seq(
+      "com.typesafe.play" %% "play" % "2.8.0" % Provided)
+
+  }
 ).disablePlugins(SbtScalariform)
 
 lazy val tests = project.in(file("tests"))
