@@ -1,12 +1,14 @@
 package reactivemongo.scalafix
 
+import scala.collection.immutable.ListSet
+
 import scalafix.v1._
 import scala.meta._
 
 class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
   override def fix(implicit doc: SemanticDocument): Patch = {
     val transformer: PartialFunction[Tree, Patch] =
-      gridfsUpgrade orElse bsonUpgrade orElse playUpgrade orElse {
+      coreUpgrade orElse gridfsUpgrade orElse bsonUpgrade orElse playUpgrade orElse {
         case _ =>
           //println(s"x = ${x.structure}")
           Patch.empty
@@ -16,6 +18,54 @@ class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
   }
 
   // ---
+
+  private def coreUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
+    case im @ Importer(
+      Term.Select(
+        Term.Select(Term.Name("reactivemongo"), Term.Name("core")),
+        Term.Name("errors")
+        ),
+      importees
+      ) => {
+      val is = ListSet.empty ++ importees.map {
+        case Importee.Name(
+          Name.Indeterminate("DetailedDatabaseException" |
+            "GenericDatabaseException")) =>
+          "DatabaseException"
+
+        case Importee.Name(
+          Name.Indeterminate("ConnectionException" |
+            "ConnectionNotInitialized" |
+            "DriverException" | "GenericDriverException")) =>
+          "ReactiveMongoException"
+
+        case i =>
+          i.syntax
+      }
+
+      val upd = if (is.size > 1) {
+        is.mkString("{ ", ", ", " }")
+      } else is.mkString
+
+      Patch.replaceTree(im, s"reactivemongo.core.errors.$upd")
+    }
+
+    case t @ Type.Name("DetailedDatabaseException" |
+      "GenericDatabaseException") if (t.symbol.info.exists(
+      _.toString startsWith "reactivemongo/core/errors/")) => {
+
+      Patch.replaceTree(t, "DatabaseException")
+    }
+
+    case t @ Type.Name("ConnectionException" |
+      "ConnectionNotInitialized" |
+      "DriverException" |
+      "GenericDriverException") if (t.symbol.info.exists(
+      _.toString startsWith "reactivemongo/core/errors/")) => {
+
+      Patch.replaceTree(t, "ReactiveMongoException")
+    }
+  }
 
   private def playUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
     case i @ Importer(
