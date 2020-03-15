@@ -1,14 +1,12 @@
 package reactivemongo.scalafix
 
-import scala.collection.immutable.ListSet
-
 import scalafix.v1._
 import scala.meta._
 
-class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
+final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
   override def fix(implicit doc: SemanticDocument): Patch = {
     val transformer: PartialFunction[Tree, Patch] =
-      coreUpgrade orElse gridfsUpgrade orElse bsonUpgrade orElse playUpgrade orElse {
+      coreUpgrade orElse gridfsUpgrade orElse bsonUpgrade orElse streamingUpgrade orElse playUpgrade orElse {
         case _ =>
           //println(s"x = ${x.structure}")
           Patch.empty
@@ -17,7 +15,62 @@ class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
     Patch.fromIterable(doc.tree.collect(transformer))
   }
 
+  /* TODO:
+   collection.remove[S](selector: S, writeConcern: WriteConcern = writeConcern, firstMatchOnly: Boolean = false)(implicit swriter: pack.Writer[S], ec: ExecutionContext): Future[WriteResult]
+
+update[S, T](selector: S, update: T, writeConcern: WriteConcern = writeConcern, upsert: Boolean = false, multi: Boolean = false)(implicit swriter: pack.Writer[S], writer: pack.Writer[T], ec: ExecutionContext): Future[UpdateWriteResult]
+
+def insert[T](document: T, writeConcern: WriteConcern = writeConcern)(implicit writer: pack.Writer[T], ec: ExecutionContext): Future[WriteResult]
+
+find[S, J](selector: S, projection: J)(implicit swriter: pack.Writer[S], pwriter: pack.Writer[J]) ~> Some(projection)
+
+def aggregateWith1[T](explain: Boolean = false, allowDiskUse: Boolean = false, bypassDocumentValidation: Boolean = false, readConcern: Option[ReadConcern] = None, readPreference: ReadPreference = ReadPreference.primary, batchSize: Option[Int] = None)(f: AggregationFramework => AggregationPipeline)(implicit ec: ExecutionContext, reader: pack.Reader[T], cf: CursorFlattener[Cursor], cp: CursorProducer[T]) ~> aggregateWith
+
+aggregatorContext[T](firstOperator: PipelineOperator, otherOperators: List[PipelineOperator], explain: Boolean, allowDiskUse: Boolean, bypassDocumentValidation: Boolean, readConcern: Option[ReadConcern], readPreference: ReadPreference, batchSize: Option[Int])(implicit reader: pack.Reader[T]): AggregatorContext[T]
+
+AsyncDriver: def connect(nodes: Seq[String], options: MongoConnectionOptions = MongoConnectionOptions.default, authentications: Seq[Authenticate] = Seq.empty, name: Option[String] = None): Future[MongoConnection]
+
+MongoDriver => AsyncDriver
+
+MongoConnection.askClose => close
+
+MongoConnection.parseURL => fromString
+
+MongoConnection.def authenticate(db: String, user: String, password: String): Future[SuccessfulAuthentication] + failoverStrategy
+
+Collection.rename => coll.db.renameCollection(coll.name, ...)
+
+DefaultDB => DB
+GenericDB => DB
+reactivemongo.api.commands.CollStatsResult => CollectionStats
+
+(QueryOps|GenericQueryBuilder).partial ~> GenericQueryBuilder.allowPartialResults
+
+collection.aggregationFramework => AggregationFramework
+   */
+
   // ---
+
+  private def streamingUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
+    case t @ Term.Apply(
+      Term.Select(c @ Term.Name(_), Term.Name("responseSource")), _) if (
+      c.symbol.info.exists(
+        _.signature.toString startsWith "AkkaStreamCursor")) =>
+      Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkSource */")
+
+    case t @ Term.Apply(
+      Term.Select(c @ Term.Name(_), Term.Name("responsePublisher")), _) if (
+      c.symbol.info.exists(
+        _.signature.toString startsWith "AkkaStreamCursor")) =>
+      Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkPublisher */")
+
+    case t @ Term.Apply(
+      Term.Select(c @ Term.Name(_), Term.Name("responseEnumerator")), _) if (
+      c.symbol.info.exists(
+        _.signature.toString startsWith "PlayIterateesCursor")) =>
+      Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkEnumerator */")
+
+  }
 
   private def coreUpgrade(implicit doc: SemanticDocument): PartialFunction[Tree, Patch] = {
     case im @ Importer(
@@ -27,7 +80,7 @@ class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
         ),
       importees
       ) => {
-      val is = ListSet.empty ++ importees.map {
+      val is = importees.map {
         case Importee.Name(
           Name.Indeterminate("DetailedDatabaseException" |
             "GenericDatabaseException")) =>
@@ -41,7 +94,7 @@ class Upgrade extends SemanticRule("ReactiveMongoUpgrade") {
 
         case i =>
           i.syntax
-      }
+      }.distinct.sorted
 
       val upd = if (is.size > 1) {
         is.mkString("{ ", ", ", " }")

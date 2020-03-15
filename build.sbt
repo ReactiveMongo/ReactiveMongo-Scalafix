@@ -24,6 +24,8 @@ lazy val input = project.in(file("input")).settings(
 
     val deps = Seq[(String, String)](
       "reactivemongo" -> previousVer,
+      "reactivemongo-akkastream" -> previousVer,
+      "reactivemongo-iteratees" -> previousVer,
       "play2-reactivemongo" -> s"${previousVer}-play26").map {
       case (nme, ver) => organization.value %% nme % ver % Provided
     }
@@ -41,15 +43,17 @@ lazy val output = project.in(file("output")).settings(
   },
   libraryDependencies ++= {
     val latestVer = "1.0.0-rc.1-SNAPSHOT"
+    val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
 
     val deps = Seq[(String, String)](
       "reactivemongo" -> latestVer,
-      "play2-reactivemongo" -> "1.0.0-rc.1-play28-SNAPSHOT").map {
+      "reactivemongo-iteratees" -> latestVer,
+      "play2-reactivemongo" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT").map {
       case (nme, ver) => organization.value %% nme % ver % Provided
     }
 
     deps ++: Seq(
-      "com.typesafe.play" %% "play" % "2.8.0" % Provided)
+      "com.typesafe.play" %% "play" % s"2.${play2Ver}.0" % Provided)
 
   }
 ).disablePlugins(SbtScalariform)
