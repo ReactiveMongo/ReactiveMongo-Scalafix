@@ -15,7 +15,8 @@ lazy val rules = project.in(file("rules")).settings(
   name := "reactivemongo-scalafix",
   moduleName := "scalafix",
   libraryDependencies ++= Seq(
-    "ch.epfl.scala" %% "scalafix-core" % SF.scalafixVersion)
+    "ch.epfl.scala" %% "scalafix-core" % SF.scalafixVersion// cross CrossVersion.full
+  )
 )
 
 lazy val input = project.in(file("input")).settings(

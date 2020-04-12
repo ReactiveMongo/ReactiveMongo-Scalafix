@@ -4,8 +4,8 @@ import com.github.ghik.silencer.silent
 
 import scala.concurrent.ExecutionContext
 
-import reactivemongo.api.bson.collection.BSONSerializationPack
 import reactivemongo.api.gridfs.GridFS
+import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object RequireMigration {
   @silent

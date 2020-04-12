@@ -1,26 +1,52 @@
-version: 2
+version: 2.1
+
+commands:
+  collect_test_reports:
+    description: Collect test reports
+    steps:
+      - run:
+          name: Collect test report
+          command: |
+                    mkdir test-reports
+                    find . -path '*/test-reports/*' -name '*.xml' \
+                      -print -exec cp {} test-reports \;
+          when: always
+
+  publish_snapshots:
+    description: Publish artifacts to Snapshots repository
+    steps:
+      - deploy:
+          name: Publish artifacts to Sonatype Snapshots
+          command: |
+                    if [ ! "${CIRCLE_BRANCH}" = "master" ]; then
+                      echo "Skipped on branch ${CIRCLE_BRANCH}"
+                      exit 0
+                    fi
+                    
+                    export PUBLISH_REPO_NAME="Sonatype Nexus Repository Manager"
+                    export PUBLISH_REPO_ID="oss.sonatype.org"
+                    export PUBLISH_REPO_URL="https://oss.sonatype.org/content/repositories/snapshots"
+                    
+                    if [ "x$PUBLISH_USER" = "x" -o "x$PUBLISH_PASS" = "x" ]; then
+                      echo "Missing publication credentials"
+                      exit 1
+                    fi
+                    
+                    sbt +publish
+
 jobs:
-  build:
+  build_n_tests:
     docker:
-      # specify the version you desire here
       - image: circleci/openjdk:8-jdk
       
     working_directory: ~/repo
 
-    environment:
-      # Customize the JVM maximum heap limit
-      JVM_OPTS: -Xmx3200m
-      TERM: dumb
-    
     steps:
       - checkout
 
-      # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-dependencies-{{ checksum "build.sbt" }}
-          # fallback to using the latest cache if no exact match is found
-          - v1-dependencies-
+          - &scala_cache_key scala-{{ checksum "version.sbt" }}-{{ checksum "compiler.sbt" }}-{{ checksum "build.sbt" }}
 
       - run:
           name: Tests
@@ -29,7 +55,67 @@ jobs:
       - save_cache:
           paths:
             - ~/.ivy2
-          key: v1-dependencies--{{ checksum "build.sbt" }}
+            - ~/.coursier/cache
+            - ~/.sbt
+          key: *scala_cache_key
 
+      - collect_test_reports
       - store_test_results:
-          path: .
+          path: test-reports
+
+  publish_snapshots:
+    docker:
+      - image: circleci/openjdk:8-jdk
+
+    working_directory: ~/repo
+    
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+          - *scala_cache_key
+
+      - publish_snapshots
+
+      - save_cache:
+          paths:
+            - ~/.ivy2
+            - ~/.coursier/cache
+            - ~/.sbt
+          key: *scala_cache_key
+
+  trigger_dependent_builds:
+    docker:
+      - image: cimg/base:2020.01
+
+    working_directory: ~/repo
+
+    steps:
+      - run:
+          name: Trigger build @ Reactivemongo-Site
+          command: |
+                    curl -X POST "https://circleci.com/api/v1.1/project/github/ReactiveMongo/reactivemongo-site/build?circle-token=${REACTIVEMONGO_SITE_API_TOKEN}"
+
+workflows:
+  version: 2
+
+  main_suite:
+    jobs:
+      - build_n_tests
+
+      - publish_snapshots:
+          filters:
+            branches:
+              only:
+                - master
+          requires:
+            - build_n_tests
+
+      - trigger_dependent_builds:
+          filters:
+            branches:
+              only:
+                - master
+          requires:
+            - publish_snapshots

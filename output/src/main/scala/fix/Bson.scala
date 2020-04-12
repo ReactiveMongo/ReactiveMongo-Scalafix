@@ -1,11 +1,9 @@
 package fix
 
-import reactivemongo.api.bson._
-import reactivemongo.api.bson.BSONValue
-import reactivemongo.api.bson.{ BSONDocument, BSONObjectID }
 
-import reactivemongo.api.bson.collection.BSONSerializationPack
 import reactivemongo.api.bson.collection.BSONCollection
+import reactivemongo.api.bson.{ BSONDocument, BSONObjectID, BSONValue, _ }
+import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object Bson {
   @com.github.ghik.silencer.silent

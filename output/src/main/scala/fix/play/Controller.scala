@@ -5,9 +5,10 @@ import scala.concurrent.Future
 import play.modules.reactivemongo.{
   MongoController,
   ReactiveMongoComponents
-}, MongoController.GridFS
+}
 
 import com.github.ghik.silencer.silent
+import MongoController.GridFS
 
 trait Controller extends MongoController { self: ReactiveMongoComponents =>
   @silent
