@@ -1,6 +1,7 @@
-ThisBuild / scalaVersion := "2.12.10"
+ThisBuild / scalaVersion := "2.12.11"
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+ThisBuild / crossScalaVersions := Seq(
+  "2.11.12", scalaVersion.value)
 
 ThisBuild / crossVersion := CrossVersion.binary
 
@@ -53,4 +54,15 @@ scalacOptions in (Compile, console) ~= {
 
 scalacOptions in (Test, console) ~= {
   _.filterNot { opt => opt.startsWith("-X") || opt.startsWith("-Y") }
+}
+
+ThisBuild / libraryDependencies ++= {
+  val silencerVersion = "1.7.0"
+
+  Seq(
+    compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).
+      cross(CrossVersion.full)),
+    ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).
+      cross(CrossVersion.full)
+  )
 }

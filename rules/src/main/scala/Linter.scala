@@ -3,7 +3,7 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-class Linter extends SemanticRule("ReactiveMongoLinter") {
+final class Linter extends SemanticRule("ReactiveMongoLinter") {
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.collect {
       case v @ Defn.Val(

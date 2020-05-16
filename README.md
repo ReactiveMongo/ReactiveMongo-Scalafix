@@ -10,27 +10,20 @@ Scalafix rules for ReactiveMongo
 
 These rules can be configured in a [SBT](https://www.scala-sbt.org/) build.
 
-First update the `project/plugins.sbt`:
+First [setup Scalafix](https://scalacenter.github.io/scalafix/docs/users/installation.html) in the SBT build.
+
+Then configure the ReactiveMongo rules:
 
 ```scala
-addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.9.11")
-```
-
-Then in the `build.sbt`:
-
-```scala
-scalafixDependencies in ThisBuild += "org.reactivemongo" % "reactivemongo-scalafix" % VERSION
-
-addCompilerPlugin(scalafixSemanticdb)
-
-scalacOptions ++= List("-Yrangepos", "-P:semanticdb:synthetics:on")
+scalafixDependencies in ThisBuild ++= Seq(
+  "org.reactivemongo" %% "reactivemongo-scalafix" % VERSION)
 ```
 
 To run the rules in SBT:
 
 ```
 test:scalafix ReactiveMongoUpgrade
-test:scalafix ReactiveMongoLinter
+test:scalafix ReactiveMongoLinter --check
 ```
 
 [![Maven](https://img.shields.io/maven-central/v/org.reactivemongo/reactivemongo-scalafix_2.12.svg)](http://search.maven.org/#search%7Cga%7C1%7Creactivemongo-scalafix)
