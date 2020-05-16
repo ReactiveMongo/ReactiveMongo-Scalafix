@@ -13,7 +13,7 @@ addCompilerPlugin(scalafixSemanticdb)
 
 lazy val rules = project.in(file("rules")).settings(
   name := "reactivemongo-scalafix",
-  moduleName := "scalafix",
+  moduleName := name.value,
   libraryDependencies ++= Seq(
     "ch.epfl.scala" %% "scalafix-core" % SF.scalafixVersion// cross CrossVersion.full
   )
@@ -23,15 +23,18 @@ lazy val input = project.in(file("input")).settings(
   libraryDependencies ++= {
     val previousVer = "0.12.7"
 
-    val deps = Seq[(String, String)](
+    val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> previousVer,
       "reactivemongo-akkastream" -> previousVer,
-      "reactivemongo-iteratees" -> previousVer,
-      "play2-reactivemongo" -> s"${previousVer}-play26").map {
-      case (nme, ver) => organization.value %% nme % ver % Provided
+      "play2-reactivemongo" -> s"${previousVer}-play26")
+
+    if (scalaBinaryVersion.value != "2.13") {
+      deps += "reactivemongo-iteratees" -> previousVer
     }
 
-    deps ++: Seq(
+    (deps.result().map {
+      case (nme, ver) => organization.value %% nme % ver % Provided
+    }) ++: Seq(
       "com.typesafe.play" %% "play" % "2.6.6" % Provided)
   },
   skip in publish := true
@@ -46,14 +49,17 @@ lazy val output = project.in(file("output")).settings(
     val latestVer = "1.0.0-rc.1-SNAPSHOT"
     val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
 
-    val deps = Seq[(String, String)](
+    val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> latestVer,
-      "reactivemongo-iteratees" -> latestVer,
-      "play2-reactivemongo" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT").map {
-      case (nme, ver) => organization.value %% nme % ver % Provided
+      "play2-reactivemongo" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT")
+
+    if (scalaBinaryVersion.value != "2.13") {
+      deps += "reactivemongo-iteratees" -> latestVer
     }
 
-    deps ++: Seq(
+    (deps.result().map {
+      case (nme, ver) => organization.value %% nme % ver % Provided
+    }) ++: Seq(
       "com.typesafe.play" %% "play" % s"2.${play2Ver}.0" % Provided)
 
   }

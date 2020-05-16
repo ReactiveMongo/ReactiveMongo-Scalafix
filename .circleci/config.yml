@@ -46,7 +46,7 @@ jobs:
 
       - restore_cache:
           keys:
-          - &scala_cache_key scala-{{ checksum "version.sbt" }}-{{ checksum "compiler.sbt" }}-{{ checksum "build.sbt" }}
+          - &scala_cache_key scala-{{ checksum "version.sbt" }}-{{ checksum "compiler.sbt" }}-{{ checksum "build.sbt" }}-{{ checksum "project/plugins.sbt" }}
 
       - run:
           name: Tests
