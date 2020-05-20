@@ -494,8 +494,59 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         Patch.fromIterable(patches.result())
       }
+
+      case Importer(
+        Term.Select(
+          Term.Select(
+            Term.Select(Term.Name("reactivemongo"), Term.Name("play")),
+            Term.Name("json")
+            ),
+          Term.Name("collection")
+          ),
+        importees) => {
+        val patches = Seq.newBuilder[Patch]
+
+        importees.foreach {
+          case i @ Importee.Name(Name.Indeterminate("JSONCollection")) =>
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(
+                q"reactivemongo.api.bson.collection",
+                List(importee"BSONCollection")))).atomic
+
+          case _ =>
+        }
+
+        Patch.fromIterable(patches.result())
+      }
+
+      case Importer(
+        Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("play")),
+          Term.Name("json")
+          ), importees) => {
+        val patches = Seq.newBuilder[Patch]
+
+        importees.foreach {
+          case i @ Importee.Name(Name.Indeterminate("JSONSerializationPack")) =>
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(
+                q"reactivemongo.api.bson.collection",
+                List(importee"BSONSerializationPack")))).atomic
+
+          case _ =>
+        }
+
+        Patch.fromIterable(patches.result())
+      }
     },
     refactor = {
+      case n @ Type.Name("JSONCollection") if (n.symbol.info.exists(
+        _.toString startsWith "reactivemongo/play/json/collection/")) =>
+        Patch.replaceTree(n, "BSONCollection")
+
+      case n @ Type.Singleton(Term.Name("JSONSerializationPack")) =>
+        Patch.replaceTree(n, "BSONSerializationPack.type")
+
       case n @ Type.Name("JsGridFS") =>
         Patch.replaceTree(n, "GridFS")
 
@@ -599,92 +650,146 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         Patch.replaceTree(u, s"${a}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
     })
 
-  private def gridfsUpgrade(implicit doc: SemanticDocument) = Fix({
-    // Extractors
+  private def gridfsUpgrade(implicit doc: SemanticDocument) = Fix(
+    `import` = {
+      case Importer(
+        Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("gridfs")
+          ), importees) => {
+        val patches = Seq.newBuilder[Patch]
 
-    object GridFSTermName {
-      def unapply(t: Term): Boolean = t match {
-        case g @ Term.Name("GridFS") =>
-          g.symbol.owner.toString == "reactivemongo/api/gridfs/"
+        importees.foreach {
+          case i @ Importee.Name(Name.Indeterminate(
+            "DefaultFileToSave" | "DefaultReadFile" |
+            "ComputedMetadata" | "BasicMetadata" | "CustomMetadata")) =>
+            patches += Patch.removeImportee(i)
 
-        case _ =>
-          false
+          case _ =>
+        }
+
+        Patch.fromIterable(patches.result())
       }
-    }
 
-    // ---
+      case Importer(
+        Term.Select(
+          Term.Select(Term.Name("play"), Term.Name("modules")),
+          Term.Name("reactivemongo")
+          ), importees) => {
+        val patches = Seq.newBuilder[Patch]
 
-    object ReadFileTypeLike {
-      def unapply(t: Type): Boolean = t match {
-        case Type.Name("BasicMetadata" |
-          "ComputedMetadata" | "CustomMetadata" | "ReadFile") =>
-          t.symbol.owner.toString == "reactivemongo/api/gridfs/"
+        importees.foreach {
+          case i @ Importee.Name(Name.Indeterminate("JSONFileToSave")) =>
+            patches += Patch.removeImportee(i)
 
-        case _ =>
-          false
+          case _ =>
+        }
+
+        Patch.fromIterable(patches.result())
       }
-    }
+    },
+    refactor = {
+      // Extractors
 
-    {
-      case gridfsRes @ Term.Apply(
-        Term.ApplyType(
-          GridFSTermName(),
-          List(Type.Singleton(Term.Name("BSONSerializationPack")))
-          ),
-        List(Term.Name(db))
-        ) =>
-        Patch.replaceTree(gridfsRes, s"${db}.gridfs")
+      object GridFSTermName {
+        def unapply(t: Term): Boolean = t match {
+          case g @ Term.Name("GridFS") =>
+            g.symbol.owner.toString == "reactivemongo/api/gridfs/"
 
-      case gridfsRes @ Term.Apply(
-        Term.ApplyType(
-          GridFSTermName(),
-          List(Type.Singleton(Term.Name("BSONSerializationPack")))
-          ),
-        List(Term.Name(db), prefix)
-        ) =>
-        Patch.replaceTree(gridfsRes, s"${db}.gridfs($prefix)")
+          case _ =>
+            false
+        }
+      }
 
       // ---
 
-      case readFileTpe @ Type.Apply(
-        ReadFileTypeLike(),
-        List(
-          Type.Singleton(Term.Name("BSONSerializationPack")),
-          Type.Name(idTpe)
-          )
-        ) =>
-        Patch.replaceTree(
-          readFileTpe, s"ReadFile[$idTpe, reactivemongo.api.bson.BSONDocument]")
+      object ReadFileTypeLike {
+        def unapply(t: Type): Boolean = t match {
+          case Type.Name("BasicMetadata" |
+            "ComputedMetadata" | "CustomMetadata" | "ReadFile") =>
+            t.symbol.owner.toString == "reactivemongo/api/gridfs/"
 
-      case save @ Term.Apply(
-        Term.Apply(
-          Term.Select(g, Term.Name("save" | "saveWithMD5")),
-          List(Term.Name(_), Term.Name(file), Term.Name(chunkSize))
-          ),
-        List(Term.Name(_), Term.Name(ec), Term.Name(_), Term.Name(_))
-        ) if (save.symbol.owner.
-        toString == "reactivemongo/api/gridfs/GridFS#") =>
-        Patch.addRight(save, s" // Consider: ${g}.writeFromInputStream(${file}, _streamNotEnumerator, $chunkSize)($ec)")
+          case _ =>
+            false
+        }
+      }
 
-      case iteratee @ Term.Apply(
-        Term.Apply(
-          Term.Select(g, Term.Name("iteratee" | "iterateeWithMD5")),
-          List(Term.Name(_), Term.Name(_))
-          ),
-        List(Term.Name(_), Term.Name(_), Term.Name(_), Term.Name(_))
-        ) if (iteratee.symbol.owner.
-        toString == "reactivemongo/api/gridfs/GridFS#") =>
-        Patch.addRight(iteratee, s" // Consider: ${g}.readToOutputStream or GridFS support in streaming modules")
+      {
+        case gridfsRes @ Term.Apply(
+          Term.ApplyType(
+            GridFSTermName(),
+            List(Type.Singleton(Term.Name("BSONSerializationPack")))
+            ),
+          List(Term.Name(db))
+          ) =>
+          Patch.replaceTree(gridfsRes, s"${db}.gridfs")
 
-      case gridfsRm @ Term.Apply(
-        Term.Select(Term.Name(gt), Term.Name("remove")),
-        List(Term.Name(ref))
-        ) if (gridfsRm.symbol.owner.
-        toString == "reactivemongo/api/gridfs/GridFS#") =>
-        Patch.replaceTree(gridfsRm, s"${gt}.remove(${ref}.id)")
+        case gridfsRes @ Term.Apply(
+          Term.ApplyType(
+            GridFSTermName(),
+            List(Type.Singleton(Term.Name("BSONSerializationPack")))
+            ),
+          List(Term.Name(db), prefix)
+          ) =>
+          Patch.replaceTree(gridfsRes, s"${db}.gridfs($prefix)")
 
-    }
-  })
+        // ---
+
+        case readFileTpe @ Type.Apply(
+          ReadFileTypeLike(),
+          List(
+            Type.Singleton(Term.Name("BSONSerializationPack")), Type.Name(idTpe))
+          ) =>
+          Patch.replaceTree(
+            readFileTpe, s"ReadFile[$idTpe, reactivemongo.api.bson.BSONDocument]")
+
+        case save @ Term.Apply(
+          Term.Apply(
+            Term.Select(g, Term.Name("save" | "saveWithMD5")),
+            List(Term.Name(_), Term.Name(file), Term.Name(chunkSize))
+            ),
+          List(Term.Name(_), Term.Name(ec), Term.Name(_), Term.Name(_))
+          ) if (save.symbol.owner.
+          toString == "reactivemongo/api/gridfs/GridFS#") =>
+          Patch.addRight(save, s" // Consider: ${g}.writeFromInputStream(${file}, _streamNotEnumerator, $chunkSize)($ec)")
+
+        case iteratee @ Term.Apply(
+          Term.Apply(
+            Term.Select(g, Term.Name("iteratee" | "iterateeWithMD5")),
+            List(Term.Name(_), Term.Name(_))
+            ),
+          List(Term.Name(_), Term.Name(_), Term.Name(_), Term.Name(_))
+          ) if (iteratee.symbol.owner.
+          toString == "reactivemongo/api/gridfs/GridFS#") =>
+          Patch.addRight(iteratee, s" // Consider: ${g}.readToOutputStream or GridFS support in streaming modules")
+
+        case gridfsRm @ Term.Apply(
+          Term.Select(Term.Name(gt), Term.Name("remove")),
+          List(Term.Name(ref))
+          ) if (gridfsRm.symbol.owner.
+          toString == "reactivemongo/api/gridfs/GridFS#") =>
+          Patch.replaceTree(gridfsRm, s"${gt}.remove(${ref}.id)")
+
+        case t @ Type.Name("DefaultFileToSave") if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/gridfs/")) =>
+          Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.GridFS.fileToSave */")
+
+        case t @ Type.Apply(Type.Name(
+          "BasicMetadata" | "CustomMetadata"), _) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/gridfs/")) =>
+          Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.ReadFile */")
+
+        case t @ Type.Name("DefaultReadFile" | "ComputedMetadata") if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/api/gridfs/")) =>
+          Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.ReadFile */")
+
+        case t @ Type.Name("JSONFileToSave") if (t.symbol.info.exists(
+          _.toString startsWith "play/modules/reactivemongo/")) =>
+          Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.ReadFile */")
+
+      }
+    })
 
   // ---
 
