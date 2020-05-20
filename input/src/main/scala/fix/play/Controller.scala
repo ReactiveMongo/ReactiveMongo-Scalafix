@@ -5,6 +5,10 @@ package fix.play
 
 import scala.concurrent.Future
 
+import reactivemongo.play.json.JSONSerializationPack
+
+import reactivemongo.play.json.collection.JSONCollection
+
 import play.modules.reactivemongo.{
   MongoController,
   ReactiveMongoComponents
@@ -21,4 +25,8 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
 
   def lorem(gfs: Future[JsGridFS]) =
     gridFSBodyParser(gfs, null)(null, null, null)
+
+  def json1(coll: JSONCollection) = coll.name
+
+  def json2(pack: JSONSerializationPack.type) = pack.toString
 }
