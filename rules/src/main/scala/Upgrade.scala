@@ -58,6 +58,28 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     `import` = {
       case Importer(
         s @ Term.Select(
+          Term.Select(
+            Term.Select(Term.Name("reactivemongo"), Term.Name("core")),
+            Term.Name("actors")), Term.Name("Exceptions")
+          ), importees) => {
+        val patches = Seq.newBuilder[Patch]
+
+        importees.foreach {
+          case i @ Importee.Name(n @ Name.Indeterminate(
+            "ChannelNotFound" | "NodeSetNotReachable")) =>
+            val nme = Name.Indeterminate(s"${n.syntax}Exception")
+
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(s, List(importee"${nme}")))).atomic
+
+          case _ =>
+        }
+
+        Patch.fromIterable(patches.result())
+      }
+
+      case Importer(
+        s @ Term.Select(
           Term.Select(Term.Name("reactivemongo"), Term.Name("core")),
           Term.Name("errors")
           ),
@@ -86,6 +108,11 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
     },
     refactor = {
+      case t @ Type.Name(n @ ("ChannelNotFound" | "NodeSetNotReachable")) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/core/actors/Exceptions")) =>
+        Patch.replaceTree(t, s"${n}Exception")
+
       case t @ Type.Name("DetailedDatabaseException" |
         "GenericDatabaseException") if (t.symbol.info.exists(
         _.toString startsWith "reactivemongo/core/errors/")) =>
@@ -200,7 +227,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
               Importer(apiPkg, List(importee"WriteConcern")))).atomic
 
           case i @ Importee.Name(
-            Name.Indeterminate("MultiBulkWriteResult")) =>
+            Name.Indeterminate(
+              "BoxedAnyVal" | "MultiBulkWriteResult" | "UnitBox")) =>
             patches += Patch.removeImportee(i)
 
           case _ =>
@@ -244,6 +272,34 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       val Update = new UpdateExtractor
 
       {
+        case t @ Term.Apply(
+          Term.Select(c, Term.Name("runValueCommand")), args) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollectionWithCommands")) =>
+          Patch.replaceTree(t, s"""${c.syntax}.runCommand(${args.map(_.syntax) mkString ", "})""")
+
+        case t @ Type.Apply(Type.Select(Term.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("commands")), Type.Name("BoxedAnyVal")),
+          List(Type.Name(v))) =>
+          Patch.replaceTree(t, v)
+
+        case t @ Type.Apply(Type.Name("BoxedAnyVal"), List(Type.Name(v))) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/api/commands/BoxedAnyVal")) =>
+          Patch.replaceTree(t, v)
+
+        case t @ Type.Singleton(Term.Name("UnitBox")) =>
+          Patch.replaceTree(t, "Unit")
+
+        case t @ Type.Singleton(Term.Select(Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("commands")), Term.Name("UnitBox"))) =>
+          Patch.replaceTree(t, "Unit")
+
+        case t @ Term.ApplyType(Term.Select(
+          s, Term.Name("unboxed")), List(_, Type.Name(r), Type.Name(c))) if (
+          t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/Command.CommandWithPackRunner")) =>
+          Patch.replaceTree(t, s"${s.syntax}.apply[${r}, ${c}]")
+
         case t @ Update((tpeParams, c, args)) => {
           val appTArgs: String = tpeParams match {
             case q :: u :: Nil => s"[$q, $u]"
