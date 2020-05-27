@@ -11,6 +11,7 @@ import reactivemongo.api.bson.collection.BSONCollection
 import com.github.ghik.silencer.silent
 import reactivemongo.api.{ AsyncDriver, CollectionStats, WriteConcern }
 import reactivemongo.api.bson.BSONDocument
+import reactivemongo.core.actors.Exceptions.{ ChannelNotFoundException, NodeSetNotReachableException }
 
 object Commands {
   def collStats(drv: AsyncDriver, wc: WriteConcern): Future[CollectionStats] = ???
@@ -94,4 +95,34 @@ object Coll {
     implicit
     ec: ExecutionContext) = coll.update(writeConcern = wc).one(q = BSONDocument("foo" -> 1), u = BSONDocument("bar" -> "lorem"), upsert = true, multi = false)
 
+  @silent def unboxedCmd1[R <: Int, C <: reactivemongo.api.commands.Command with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C)(implicit ec: ExecutionContext) = coll.runner.apply[R, C](coll.db, cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
+
+  type DeprecatedUnitBox = Unit
+
+  def withUnitBox(a: Unit, b: Option[Unit]) = a -> b
+
+  @silent def valueCmd1[R <: Int, C <: reactivemongo.api.commands.CollectionCommand with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C with reactivemongo.api.commands.CommandWithResult[R with Int])(implicit ec: ExecutionContext) = coll.runCommand(cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
+}
+
+object Core {
+
+  type CNF = ChannelNotFoundException
+  type NSNR = NodeSetNotReachableException
+
+  def handle1(ex: Exception): Unit = ex match {
+    case _: reactivemongo.core.actors.Exceptions.ChannelNotFoundException =>
+      ex.printStackTrace()
+
+    case _: reactivemongo.core.actors.Exceptions.NodeSetNotReachableException =>
+      ex.printStackTrace()
+
+    case _ =>
+  }
+
+  def handle2(ex: Exception): Unit = ex match {
+    case _: ChannelNotFoundException | _: NodeSetNotReachableException =>
+      ex.printStackTrace()
+
+    case _ =>
+  }
 }

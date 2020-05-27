@@ -109,4 +109,39 @@ object Coll {
     multi = false,
     upsert = true)
 
+  @silent def unboxedCmd1[R <: reactivemongo.api.commands.BoxedAnyVal[Int], C <: reactivemongo.api.commands.Command with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C)(implicit ec: ExecutionContext) = coll.runner.unboxed[Int, R, C](coll.db, cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
+
+  type DeprecatedUnitBox = reactivemongo.api.commands.UnitBox.type
+
+  import reactivemongo.api.commands.{ BoxedAnyVal, UnitBox }
+  def withUnitBox(a: UnitBox.type, b: Option[reactivemongo.api.commands.UnitBox.type]) = a -> b
+
+  @silent def valueCmd1[R <: BoxedAnyVal[Int], C <: reactivemongo.api.commands.CollectionCommand with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C with reactivemongo.api.commands.CommandWithResult[R with reactivemongo.api.commands.BoxedAnyVal[Int]])(implicit ec: ExecutionContext) = coll.runValueCommand(cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
+}
+
+object Core {
+  import reactivemongo.core.actors.Exceptions.{
+    ChannelNotFound,
+    NodeSetNotReachable
+  }
+
+  type CNF = ChannelNotFound
+  type NSNR = NodeSetNotReachable
+
+  def handle1(ex: Exception): Unit = ex match {
+    case _: reactivemongo.core.actors.Exceptions.ChannelNotFound =>
+      ex.printStackTrace()
+
+    case _: reactivemongo.core.actors.Exceptions.NodeSetNotReachable =>
+      ex.printStackTrace()
+
+    case _ =>
+  }
+
+  def handle2(ex: Exception): Unit = ex match {
+    case _: ChannelNotFound | _: NodeSetNotReachable =>
+      ex.printStackTrace()
+
+    case _ =>
+  }
 }
