@@ -3,6 +3,8 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
+// TODO: extends BSONReader/Writer/Handler/... ~> factories
+
 final class Linter extends SemanticRule("ReactiveMongoLinter") {
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.collect {

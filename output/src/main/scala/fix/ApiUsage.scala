@@ -58,6 +58,15 @@ object Coll {
 
   def query2(coll: BSONCollection) = coll.find(selector = BSONDocument.empty, projection = Some(BSONDocument("lorem" -> 1)))
 
+  type QO1 = Nothing /* No longer exists: reactivemongo.api.QueryOpts */
+  type QO2 = Nothing /* No longer exists: QueryOpts */
+
+  def queryOpts1 = ??? /* QueryOpts(batchSizeN = 100): Directly use query builder */
+
+  def queryOpts2 = ??? /* reactivemongo.api.QueryOpts(skipN = 10): Directly use query builder */
+
+  def queryOpts3 = ??? /* reactivemongo.api.QueryOpts().skip(10): Directly use query builder */
+
   @silent
   def agg1(coll: BSONCollection)(implicit ec: ExecutionContext) =
     coll.aggregateWith[BSONDocument](explain = true, true) { f =>

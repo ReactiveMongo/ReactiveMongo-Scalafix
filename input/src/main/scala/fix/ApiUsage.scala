@@ -5,7 +5,7 @@ package fix
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-import reactivemongo.api.{ MongoDriver, MongoConnection }
+import reactivemongo.api.{ MongoDriver, MongoConnection, QueryOpts }
 import reactivemongo.api.commands.{ CollStatsResult, WriteConcern }
 
 import reactivemongo.api.commands.MultiBulkWriteResult
@@ -62,6 +62,15 @@ object Coll {
   def query2(coll: BSONCollection) = coll.find(
     projection = BSONDocument("lorem" -> 1),
     selector = BSONDocument.empty)
+
+  type QO1 = reactivemongo.api.QueryOpts
+  type QO2 = QueryOpts
+
+  def queryOpts1 = QueryOpts(batchSizeN = 100)
+
+  def queryOpts2 = reactivemongo.api.QueryOpts(skipN = 10)
+
+  def queryOpts3 = reactivemongo.api.QueryOpts().skip(10)
 
   @silent
   def agg1(coll: BSONCollection)(implicit ec: ExecutionContext) =

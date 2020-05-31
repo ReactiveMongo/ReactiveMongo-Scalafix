@@ -4,7 +4,15 @@ import scalafix.v1._
 import scala.meta._
 
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
-  override def fix(implicit doc: SemanticDocument): Patch = {
+  override def fix(implicit doc: SemanticDocument): Patch =
+    Patch.fromIterable(doc.tree.children.map(transformer))
+
+  // ---
+
+  private def transformer(
+    implicit
+    doc: SemanticDocument): Tree => Patch = {
+
     val fixes = Seq[Fix](
       coreUpgrade,
       apiUpgrade, gridfsUpgrade, bsonUpgrade, streamingUpgrade, playUpgrade)
@@ -14,23 +22,36 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         _ orElse _.`import`
       }).orElse({ case _ => Patch.empty })
 
-    val pipeline = fixes.foldLeft[PartialFunction[Tree, Patch]]({
-      case Import(importers) => Patch.fromIterable(importers.map(fixImport))
+    val pipeline = fixes.foldLeft[PartialFunction[Tree, PatchDirective]]({
+      case Import(importers) =>
+        Patch.fromIterable(importers.map(fixImport))
+
     }) {
       _ orElse _.refactor
     }
 
-    val transformer: PartialFunction[Tree, Patch] =
-      pipeline orElse {
-        case _ =>
-          //println(s"x = ${x.structure}")
+    { tree: Tree =>
+      // println(s"tree = ${tree.structure}")
+
+      def recurse = Patch.fromIterable(tree.children.map(transformer))
+
+      pipeline.lift(tree).map { p =>
+        if (p.patch.nonEmpty) {
+          p.patch
+        } else if (p.recurse && tree.children.nonEmpty) {
+          recurse
+        } else {
           Patch.empty
+        }
+      }.getOrElse {
+        if (tree.children.nonEmpty) {
+          recurse
+        } else {
+          Patch.empty
+        }
       }
-
-    Patch.fromIterable(doc.tree.collect(transformer))
+    }
   }
-
-  // ---
 
   private def streamingUpgrade(implicit doc: SemanticDocument) = Fix(
     refactor = {
@@ -261,6 +282,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(apiPkg, List(importee"AsyncDriver")))).atomic
 
+          case i @ Importee.Name(Name.Indeterminate("QueryOpts")) =>
+            patches += Patch.removeImportee(i)
+
           case _ =>
         }
 
@@ -272,6 +296,18 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       val Update = new UpdateExtractor
 
       {
+        case t @ (Type.Name("QueryOpts") | Type.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("api")),
+          Type.Name("QueryOpts"))) =>
+          Patch.replaceTree(t, s"Nothing /* No longer exists: ${t.syntax} */")
+
+        case t @ Term.Apply(_, _) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/QueryOpts")) =>
+          Patch.replaceTree(
+            t, s"??? /* ${t.syntax}: Directly use query builder */") -> false
+
+        // ---
+
         case t @ Term.Apply(
           Term.Select(c, Term.Name("runValueCommand")), args) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollectionWithCommands")) =>
           Patch.replaceTree(t, s"""${c.syntax}.runCommand(${args.map(_.syntax) mkString ", "})""")
@@ -694,7 +730,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       case t @ Type.Select(
         Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
         Type.Name(n)
-        ) if (n != "BSONReader" && n != "BSONHandler" && n != "BSONWriter") =>
+        ) if (!Seq("BSONReader", "BSONHandler", "BSONWriter").contains(n)) =>
         Patch.replaceTree(t, s"reactivemongo.api.bson.$n")
 
       case t @ Term.Select(
@@ -900,6 +936,19 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   // ---
 
   private case class Fix(
-    refactor: PartialFunction[Tree, Patch],
+    refactor: PartialFunction[Tree, PatchDirective],
     `import`: PartialFunction[Importer, Patch] = PartialFunction.empty[Importer, Patch])
+
+  private case class PatchDirective(
+    patch: Patch,
+    recurse: Boolean)
+
+  private object PatchDirective {
+    import scala.language.implicitConversions
+
+    implicit def default(p: Patch): PatchDirective = PatchDirective(p, true)
+
+    implicit def full(spec: (Patch, Boolean)): PatchDirective =
+      PatchDirective(spec._1, spec._2)
+  }
 }
