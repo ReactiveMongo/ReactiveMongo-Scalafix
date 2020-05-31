@@ -628,9 +628,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
   private def bsonUpgrade(implicit doc: SemanticDocument) = Fix(
     `import` = {
-      case Importer(
-        Term.Select(
-          Term.Name("reactivemongo"), Term.Name("bson")), is) => {
+      case Importer(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("bson")), is) => {
+
         val apiPkg = Term.Select(Term.Select(
           Term.Name("reactivemongo"),
           Term.Name("api")), Term.Name("bson"))
@@ -640,12 +640,61 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             Importer(apiPkg, List(i)))).atomic)
         })
       }
+
+      case Importer(Term.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("bson")),
+        Term.Name("DefaultBSONHandlers")), is) => {
+
+        val apiPkg = Term.Select(Term.Select(
+          Term.Name("reactivemongo"),
+          Term.Name("api")), Term.Name("bson"))
+
+        Patch.fromIterable(is.flatMap { i =>
+          Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
+            Importer(apiPkg, List(i)))).atomic)
+        })
+      }
+
+      case Importer(Term.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("bson")), x), is) => {
+
+        val apiPkg = Term.Select(Term.Select(
+          Term.Select(
+            Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("bson")), x)
+
+        Patch.fromIterable(is.flatMap { i =>
+          Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
+            Importer(apiPkg, List(i)))).atomic)
+        })
+      }
     },
     refactor = {
+      case t @ Type.Apply(Type.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("bson")),
+        n @ Type.Name("BSONHandler" | "BSONReader")), List(_, tpe)) =>
+        Patch.replaceTree(t, s"reactivemongo.api.bson.$n[${tpe.syntax}]")
+
+      case t @ Type.Apply(Type.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("bson")),
+        Type.Name(n @ "BSONWriter")), List(tpe, _)) =>
+        Patch.replaceTree(t, s"reactivemongo.api.bson.${n}[${tpe.syntax}]")
+
+      case t @ Type.Apply(
+        n @ Type.Name("BSONHandler" | "BSONReader"), List(_, tpe)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSON")) =>
+        Patch.replaceTree(t, s"${n.syntax}[${tpe.syntax}]")
+
+      case t @ Type.Apply(n @ Type.Name("BSONWriter"),
+        List(Type.Name(tpe), _)) if (t.symbol.info.exists(
+        _.toString startsWith "reactivemongo/bson/BSON")) =>
+        Patch.replaceTree(t, s"${n}[${tpe}]")
+
       case t @ Type.Select(
         Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
         Type.Name(n)
-        ) =>
+        ) if (n != "BSONReader" && n != "BSONHandler" && n != "BSONWriter") =>
         Patch.replaceTree(t, s"reactivemongo.api.bson.$n")
 
       case t @ Term.Select(
@@ -704,6 +753,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         List(f)
         ) if (x.symbol.info.exists(_.signature.toString == "BSONDocument")) =>
         Patch.replaceTree(u, s"${a}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
+
     })
 
   private def gridfsUpgrade(implicit doc: SemanticDocument) = Fix(

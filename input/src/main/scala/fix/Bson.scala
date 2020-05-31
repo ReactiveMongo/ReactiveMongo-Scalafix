@@ -5,7 +5,9 @@ package fix
 
 import reactivemongo.bson._
 import reactivemongo.bson.BSONValue
-import reactivemongo.bson.{ BSONDocument, BSONObjectID }
+import reactivemongo.bson.{ BSONDocument, BSONObjectID, BSONReader }
+
+import reactivemongo.bson.DefaultBSONHandlers._
 
 import reactivemongo.api.BSONSerializationPack
 import reactivemongo.api.collections.bson.BSONCollection
@@ -29,4 +31,31 @@ object Bson {
   def collName1(coll: BSONCollection): String = coll.name
 
   def collName2(coll: reactivemongo.api.collections.bson.BSONCollection): String = coll.name
+
+  type Reader1[T] = BSONReader[BSONValue, T]
+  type Reader2[T] = reactivemongo.bson.BSONReader[BSONValue, T]
+
+  def reader1[T](r: reactivemongo.bson.BSONReader[_ <: BSONValue, T]): Unit =
+    println(s"r = $r")
+
+  def reader2[T](r: BSONReader[BSONString, T]): Unit =
+    println(s"r = $r")
+
+  type Writer1[T] = BSONWriter[T, BSONValue]
+  type Writer2[T] = reactivemongo.bson.BSONWriter[T, BSONValue]
+
+  def writer1[T](w: reactivemongo.bson.BSONWriter[T, _ <: BSONValue]): Unit =
+    println(s"w = $w")
+
+  def writer2[T](w: BSONWriter[T, BSONInteger]): Unit =
+    println(s"w = $w")
+
+  type Handler1[T] = BSONHandler[BSONValue, T]
+  type Handler2[T] = reactivemongo.bson.BSONHandler[BSONValue, T]
+
+  def handler1[T](h: reactivemongo.bson.BSONHandler[_ <: BSONValue, T]): Unit =
+    println(s"h = $h")
+
+  def handler2[T](h: BSONHandler[BSONInteger, T]): Unit =
+    println(s"h = $h")
 }
