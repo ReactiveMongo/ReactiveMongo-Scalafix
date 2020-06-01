@@ -3,6 +3,16 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
+/*
+TODO: migrationRequired instead of ???
+
+TODO: BSONDocument ~:
+TODO: BSON{Handler,Reader,Writer}[.., ..] ~> BSONX[..]
+TODO: Index.apply
+TODO: bson{Reader,Handler}.read ~> readTry
+TODO: bson{Writer,Handler}.write ~> writeTry
+ */
+
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -59,19 +69,19 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         Term.Select(c @ Term.Name(_), Term.Name("responseSource")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "AkkaStreamCursor")) =>
-        Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkSource */")
+        migrationRequired(t, "Use bulkSource")
 
       case t @ Term.Apply(
         Term.Select(c @ Term.Name(_), Term.Name("responsePublisher")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "AkkaStreamCursor")) =>
-        Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkPublisher */")
+        migrationRequired(t, "Use bulkPublisher")
 
       case t @ Term.Apply(
         Term.Select(c @ Term.Name(_), Term.Name("responseEnumerator")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "PlayIterateesCursor")) =>
-        Patch.replaceTree(t, s"??? /* ${t.syntax}: Use bulkEnumerator */")
+        migrationRequired(t, "Use bulkEnumerator")
 
     })
 
@@ -130,20 +140,19 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     },
     refactor = {
       case t @ Type.Name(n @ ("ChannelNotFound" | "NodeSetNotReachable")) if (
-        t.symbol.info.exists(
-          _.toString startsWith "reactivemongo/core/actors/Exceptions")) =>
+        testSym(t)(_ startsWith "reactivemongo/core/actors/Exceptions")) =>
         Patch.replaceTree(t, s"${n}Exception")
 
       case t @ Type.Name("DetailedDatabaseException" |
-        "GenericDatabaseException") if (t.symbol.info.exists(
-        _.toString startsWith "reactivemongo/core/errors/")) =>
+        "GenericDatabaseException") if (testSym(t)(
+        _ startsWith "reactivemongo/core/errors/")) =>
         Patch.replaceTree(t, "DatabaseException")
 
       case t @ Type.Name("ConnectionException" |
         "ConnectionNotInitialized" |
         "DriverException" |
-        "GenericDriverException") if (t.symbol.info.exists(
-        _.toString startsWith "reactivemongo/core/errors/")) =>
+        "GenericDriverException") if (testSym(t)(
+        _ startsWith "reactivemongo/core/errors/")) =>
         Patch.replaceTree(t, "ReactiveMongoException")
     })
 
@@ -932,6 +941,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
       }
     })
+
+  private def testSym(t: Tree)(f: String => Boolean)(
+    implicit
+    doc: SemanticDocument): Boolean =
+    t.symbol.info.exists { i => f(i.toString) }
+
+  @inline private def migrationRequired(t: Tree, msg: String): Patch = Patch.replaceTree(t, s"""reactivemongo.api.bson.migrationRequired("${msg}") /* ${t.syntax} */""")
 
   // ---
 
