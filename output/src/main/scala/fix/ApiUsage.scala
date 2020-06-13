@@ -11,12 +11,27 @@ import reactivemongo.api.bson.collection.BSONCollection
 import com.github.ghik.silencer.silent
 import reactivemongo.api.{ AsyncDriver, CollectionStats, WriteConcern }
 import reactivemongo.api.bson.BSONDocument
+import reactivemongo.api.commands.CommandException
 import reactivemongo.core.actors.Exceptions.{ ChannelNotFoundException, NodeSetNotReachableException }
 
 object Commands {
   def collStats(drv: AsyncDriver, wc: WriteConcern): Future[CollectionStats] = ???
 
   def bulk: Future[Any /* MultiBulkWriteResult ~> anyCollection.MultiBulkWriteResult */] = ???
+
+  def handle1(e: Exception): Unit = e match {
+    case CommandException.Code(c) =>
+      println(s"code = $c")
+
+    case _ =>
+  }
+
+  def handle2(e: Exception): Unit = e match {
+    case reactivemongo.api.commands.CommandException.Code(c) =>
+      println(s"code = $c")
+
+    case _ =>
+  }
 }
 
 object Drv {
@@ -61,11 +76,11 @@ object Coll {
   type QO1 = Nothing /* No longer exists: reactivemongo.api.QueryOpts */
   type QO2 = Nothing /* No longer exists: QueryOpts */
 
-  def queryOpts1 = ??? /* QueryOpts(batchSizeN = 100): Directly use query builder */
+  def queryOpts1 = reactivemongo.api.bson.migrationRequired("Directly use query builder") /* QueryOpts(batchSizeN = 100) */
 
-  def queryOpts2 = ??? /* reactivemongo.api.QueryOpts(skipN = 10): Directly use query builder */
+  def queryOpts2 = reactivemongo.api.bson.migrationRequired("Directly use query builder") /* reactivemongo.api.QueryOpts(skipN = 10) */
 
-  def queryOpts3 = ??? /* reactivemongo.api.QueryOpts().skip(10): Directly use query builder */
+  def queryOpts3 = reactivemongo.api.bson.migrationRequired("Directly use query builder") /* reactivemongo.api.QueryOpts().skip(10) */
 
   @silent
   def agg1(coll: BSONCollection)(implicit ec: ExecutionContext) =

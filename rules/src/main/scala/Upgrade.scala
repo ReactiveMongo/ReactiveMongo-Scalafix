@@ -4,13 +4,20 @@ import scalafix.v1._
 import scala.meta._
 
 /*
-TODO: migrationRequired instead of ???
-
-TODO: BSONDocument ~:
-TODO: BSON{Handler,Reader,Writer}[.., ..] ~> BSONX[..]
 TODO: Index.apply
-TODO: bson{Reader,Handler}.read ~> readTry
-TODO: bson{Writer,Handler}.write ~> writeTry
+
+TODO:
+object CommandError is not a member of package reactivemongo.api.commands
+[error] import reactivemongo.api.commands.CommandError => CommandException
+
+TODO:
+wrong number of type arguments for reactivemongo.api.bson.BSONWriter, should be 1
+[error]     val writer: BSONWriter[NonEmptyList[T], BSONArray] =
+
+[error] /Users/cchantep/Projects/paperjam/server/common/mongo/src/main/scala/lu/paperjam/mongo/FuzzySearch.scala:99:13: overloaded method value apply with alternatives:
+[error]   (key: Seq[(String, reactivemongo.api.indexes.IndexType)],name: Option[String],unique: Boolean,background: Boolean,sparse: Boolean,expireAfterSeconds: Option[Int],storageEngine: Option[reactivemongo.api.bson.collection.BSONSerializationPack.Document],weights: Option[reactivemongo.api.bson.collection.BSONSerializationPack.Document],defaultLanguage: Option[String],languageOverride: Option[String],textIndexVersion: Option[Int],sphereIndexVersion: Option[Int],bits: Option[Int],min: Option[Double],max: Option[Double],bucketSize: Option[Double],collation: Option[reactivemongo.api.Collation],wildcardProjection: Option[reactivemongo.api.bson.collection.BSONSerializationPack.Document],version: Option[Int],partialFilter: Option[reactivemongo.api.bson.collection.BSONSerializationPack.Document],options: reactivemongo.api.bson.collection.BSONSerializationPack.Document)reactivemongo.api.indexes.Index.Aux[reactivemongo.api.Serialization.Pack] <and>
+[error]   [P <: reactivemongo.api.SerializationPack](_pack: P)(key: Seq[(String, reactivemongo.api.indexes.IndexType)], name: Option[String], unique: Boolean, background: Boolean, sparse: Boolean, expireAfterSeconds: Option[Int], storageEngine: Option[_pack.Document], weights: Option[_pack.Document], defaultLanguage: Option[String], languageOverride: Option[String], textIndexVersion: Option[Int], sphereIndexVersion: Option[Int], bits: Option[Int], min: Option[Double], max: Option[Double], bucketSize: Option[Double], collation: Option[reactivemongo.api.Collation], wildcardProjection: Option[_pack.Document], version: Option[Int], partialFilter: Option[_pack.Document], options: _pack.Document)reactivemongo.api.indexes.Index.Aux[P]
+
  */
 
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
@@ -41,7 +48,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     }
 
     { tree: Tree =>
-      // println(s"tree = ${tree.structure}")
+      //println(s"tree = ${tree.structure}")
 
       def recurse = Patch.fromIterable(tree.children.map(transformer))
 
@@ -239,7 +246,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   private def apiUpgrade(implicit doc: SemanticDocument) = Fix(
     `import` = {
       case Importer(
-        Term.Select(
+        cmdPkg @ Term.Select(
           apiPkg @ Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
           Term.Name("commands")
           ),
@@ -251,6 +258,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           case i @ Importee.Name(Name.Indeterminate("CollStatsResult")) =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(apiPkg, List(importee"CollectionStats")))).atomic
+
+          case i @ Importee.Name(Name.Indeterminate("CommandError")) =>
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(cmdPkg, List(importee"CommandException")))).atomic
 
           case i @ Importee.Name(Name.Indeterminate("WriteConcern")) =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
@@ -305,6 +316,11 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       val Update = new UpdateExtractor
 
       {
+        case t @ Term.Name("CommandError") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/CommandError")) =>
+          Patch.replaceTree(t, "CommandException")
+
+        // ---
+
         case t @ (Type.Name("QueryOpts") | Type.Select(Term.Select(
           Term.Name("reactivemongo"), Term.Name("api")),
           Type.Name("QueryOpts"))) =>
@@ -312,8 +328,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         case t @ Term.Apply(_, _) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/QueryOpts")) =>
-          Patch.replaceTree(
-            t, s"??? /* ${t.syntax}: Directly use query builder */") -> false
+          migrationRequired(t, "Directly use query builder") -> false
 
         // ---
 
@@ -715,6 +730,40 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
     },
     refactor = {
+      case t @ Term.Apply(Term.Select(r, Term.Name("read")), List(arg)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSON")) =>
+        Patch.replaceTree(t, s"${r.syntax}.readTry(${arg.syntax})")
+
+      case t @ Term.Apply(Term.Select(r, Term.Name("write")), List(arg)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSON")) =>
+        Patch.replaceTree(t, s"${r.syntax}.writeTry(${arg.syntax})")
+
+      case t @ Term.Apply(Term.ApplyType(
+        Term.Name(n @ ("BSONHandler" | "BSONReader")),
+        List(Type.Name(_), Type.Name(tpe))), args) =>
+        Patch.replaceTree(
+          t, s"${n}[${tpe}](${args.map(_.syntax).mkString(", ")})")
+
+      case t @ Term.Apply(Term.ApplyType(Term.Select(
+        Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+        Term.Name(n @ ("BSONHandler" | "BSONReader"))),
+        List(Type.Name(_), Type.Name(tpe))), args) =>
+        Patch.replaceTree(t, s"reactivemongo.api.bson.${n}[${tpe}](${args.map(_.syntax).mkString(", ")})")
+
+      case t @ Term.Apply(Term.ApplyType(
+        Term.Name("BSONWriter"),
+        List(Type.Name(tpe), Type.Name(_))), List(f)) =>
+        Patch.replaceTree(t, s"BSONWriter[${tpe}](${f.syntax})")
+
+      case t @ Term.Apply(Term.ApplyType(Term.Select(
+        Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+        Term.Name("BSONWriter")),
+        List(Type.Name(tpe), Type.Name(_))), List(f)) =>
+        Patch.replaceTree(
+          t, s"reactivemongo.api.bson.BSONWriter[${tpe}](${f.syntax})")
+
       case t @ Type.Apply(Type.Select(Term.Select(
         Term.Name("reactivemongo"), Term.Name("bson")),
         n @ Type.Name("BSONHandler" | "BSONReader")), List(_, tpe)) =>
@@ -753,7 +802,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       case v @ Term.Apply(Term.Select(
         Term.Apply(
           Term.ApplyType(
-            Term.Select(d @ Term.Name(n), Term.Name("getAs")),
+            Term.Select(d, Term.Name("getAs")),
             List(t @ Type.Name("BSONNumberLike" | "BSONBooleanLike"))
             ),
           List(f)
@@ -761,9 +810,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         Term.Name("map")
         ),
         List(body)
-        ) if (d.symbol.info.exists { s =>
-        val t = s.signature.toString
-        t == "BSONDocument" || t == "BSONArray"
+        ) if (d.symbol.info.exists { i =>
+        val t = i.toString
+        val s = i.signature.toString
+
+        s == "BSONDocument" || s == "BSONArray" ||
+          t.startsWith("reactivemongo/bson/BSONDocument") ||
+          t.startsWith("reactivemongo/bson/BSONArray")
       }) => {
         val b = body match {
           case Term.Select(_: Term.Placeholder, expr) =>
@@ -776,28 +829,52 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             body.syntax
         }
 
-        Patch.replaceTree(v, s"${n}.getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")
+        val pd = transformer(doc)(d)
+
+        if (pd.nonEmpty) {
+          (pd + Patch.replaceTree(
+            v, s".getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")).atomic
+        } else {
+          Patch.replaceTree(
+            v, s"${d.syntax}.getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")
+        }
       }
 
-      case getAs @ Term.Apply(
-        Term.ApplyType(
-          Term.Select(x @ Term.Name(a), Term.Name("getAs")),
-          List(Type.Name(t))
-          ),
-        List(f)
-        ) if (t != "BSONNumberLike" && t != "BSONBooleanLike" &&
-        x.symbol.info.exists { i =>
-          val s = i.signature.toString
+      case getAs @ Term.Apply(Term.ApplyType(Term.Select(
+        d, Term.Name("getAs")), List(t)), List(nme)) if (
+        t != "BSONNumberLike" && t != "BSONBooleanLike" &&
+        getAs.symbol.info.exists { i =>
+          val s = i.toString
 
-          s == "BSONDocument" || s == "BSONArray"
-        }) =>
-        Patch.replaceTree(getAs, s"${a}.getAsOpt[${t}]($f)")
+          s.startsWith("reactivemongo/bson/BSONDocument") || s.
+            startsWith("reactivemongo/bson/BSONArray")
+        }) => {
+        val pd = transformer(doc)(d)
+
+        if (pd.nonEmpty) {
+          (pd + Patch.replaceTree(getAs, s".getAsOpt[${t}]($nme)")).atomic
+        } else {
+          Patch.replaceTree(getAs, s"${d.syntax}.getAsOpt[${t}]($nme)")
+        }
+      }
 
       case u @ Term.Apply(
-        Term.Select(x @ Term.Name(a), Term.Name("getUnflattenedTry")),
+        Term.Select(x, Term.Name("getUnflattenedTry")),
         List(f)
         ) if (x.symbol.info.exists(_.signature.toString == "BSONDocument")) =>
-        Patch.replaceTree(u, s"${a}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
+        Patch.replaceTree(u, s"${x.syntax}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
+
+      case t @ Term.ApplyInfix(
+        d, Term.Name(":~"), List(), List(arg)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSONDocument")) =>
+        Patch.replaceTree(t, s"(${d.syntax} ++ ${arg.syntax})")
+
+      case t @ Term.ApplyInfix(
+        arg, Term.Name("~:"), List(), List(d)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSONDocument")) =>
+        Patch.replaceTree(t, s"(BSONDocument(${arg.syntax}) ++ ${d.syntax})")
 
     })
 

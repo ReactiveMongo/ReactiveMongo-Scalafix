@@ -8,7 +8,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 import reactivemongo.api.{ MongoDriver, MongoConnection, QueryOpts }
 import reactivemongo.api.commands.{ CollStatsResult, WriteConcern }
 
-import reactivemongo.api.commands.MultiBulkWriteResult
+import reactivemongo.api.commands.{ CommandError, MultiBulkWriteResult }
 
 import reactivemongo.api.collections.GenericCollection
 import reactivemongo.api.collections.bson.BSONCollection
@@ -19,6 +19,20 @@ object Commands {
   def collStats(drv: MongoDriver, wc: WriteConcern): Future[CollStatsResult] = ???
 
   def bulk: Future[MultiBulkWriteResult] = ???
+
+  def handle1(e: Exception): Unit = e match {
+    case CommandError.Code(c) =>
+      println(s"code = $c")
+
+    case _ =>
+  }
+
+  def handle2(e: Exception): Unit = e match {
+    case reactivemongo.api.commands.CommandError.Code(c) =>
+      println(s"code = $c")
+
+    case _ =>
+  }
 }
 
 object Drv {

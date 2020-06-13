@@ -11,9 +11,10 @@ object Bson {
   def foo(n: BSONDouble, v: BSONValue, d: BSONDocument, i: BSONObjectID) = BSONSerializationPack
 
   def bar(doc: reactivemongo.api.bson.BSONDocument): Option[Int] =
-    doc.getAsOpt[BSONNumberLike]("_i").flatMap { _.toInt.toOption }
+    (BSONDocument(("foo" -> 0)) ++ doc).getAsOpt[BSONNumberLike]("_i").flatMap { _.toInt.toOption }
 
-  def lorem(doc: BSONDocument) = doc.getAsOpt[String]("...")
+  def lorem(doc: BSONDocument) =
+    (doc ++ ("foo" -> 1)).getAsOpt[String]("...")
 
   def ipsum(doc: BSONDocument) = doc.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]("...")
 
@@ -32,8 +33,15 @@ object Bson {
   def reader1[T](r: reactivemongo.api.bson.BSONReader[T]): Unit =
     println(s"r = $r")
 
-  def reader2[T](r: BSONReader[T]): Unit =
-    println(s"r = $r")
+  def reader2[T](r: BSONReader[T]): Unit = {
+    val v = r.readTry(BSONString("foo"))
+    println(s"v = $v")
+  }
+
+  def reader3[T](f: BSONValue => T) = BSONReader[T](f)
+
+  def reader4[T](f: BSONValue => T) =
+    reactivemongo.api.bson.BSONReader[T](f)
 
   type Writer1[T] = BSONWriter[T]
   type Writer2[T] = reactivemongo.api.bson.BSONWriter[T]
@@ -41,8 +49,15 @@ object Bson {
   def writer1[T](w: reactivemongo.api.bson.BSONWriter[T]): Unit =
     println(s"w = $w")
 
-  def writer2[T](w: BSONWriter[T]): Unit =
-    println(s"w = $w")
+  def writer2[T](w: BSONWriter[T], v: T): Unit = {
+    val b = w.writeTry(v)
+    println(s"b = $b")
+  }
+
+  def writer3[T](f: T => BSONValue) = BSONWriter[T](f)
+
+  def writer4[T](f: T => BSONValue) =
+    reactivemongo.api.bson.BSONWriter[T](f)
 
   type Handler1[T] = BSONHandler[T]
   type Handler2[T] = reactivemongo.api.bson.BSONHandler[T]
@@ -50,6 +65,15 @@ object Bson {
   def handler1[T](h: reactivemongo.api.bson.BSONHandler[T]): Unit =
     println(s"h = $h")
 
-  def handler2[T](h: BSONHandler[T]): Unit =
-    println(s"h = $h")
+  def handler2[T](h: BSONHandler[T], v: T): Unit = {
+    val b = h.writeTry(v)
+    val r = h.readTry(BSONInteger(1))
+    println(s"b = $b, r = $r")
+  }
+
+  def handler3[T](r: BSONValue => T, w: T => BSONValue) =
+    BSONHandler[T](r, w)
+
+  def handler4[T](r: BSONValue => T, w: T => BSONValue) =
+    reactivemongo.api.bson.BSONHandler[T](r, w)
 }
