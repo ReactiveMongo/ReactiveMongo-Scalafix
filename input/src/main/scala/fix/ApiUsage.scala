@@ -8,10 +8,16 @@ import scala.concurrent.{ ExecutionContext, Future }
 import reactivemongo.api.{ MongoDriver, MongoConnection, QueryOpts }
 import reactivemongo.api.commands.{ CollStatsResult, WriteConcern }
 
-import reactivemongo.api.commands.{ CommandError, MultiBulkWriteResult }
+import reactivemongo.api.commands.{
+  CommandError,
+  MultiBulkWriteResult,
+  UpdateWriteResult
+}
 
 import reactivemongo.api.collections.GenericCollection
 import reactivemongo.api.collections.bson.BSONCollection
+
+import reactivemongo.api.indexes.Index
 
 import com.github.ghik.silencer.silent
 
@@ -19,6 +25,8 @@ object Commands {
   def collStats(drv: MongoDriver, wc: WriteConcern): Future[CollStatsResult] = ???
 
   def bulk: Future[MultiBulkWriteResult] = ???
+
+  def update: Future[UpdateWriteResult] = ???
 
   def handle1(e: Exception): Unit = e match {
     case CommandError.Code(c) =>
@@ -33,6 +41,11 @@ object Commands {
 
     case _ =>
   }
+
+  def index1: Seq[Index] = Seq(Index(Seq.empty, name = Some("foo")))
+
+  def index2: Index = reactivemongo.api.indexes.Index(
+    Seq.empty, name = Some("foo"), false, false, false, version = Some(1))
 }
 
 object Drv {

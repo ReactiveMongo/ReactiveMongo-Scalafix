@@ -2,8 +2,10 @@ package fix
 
 
 
+
 import reactivemongo.api.bson.collection.BSONCollection
 import reactivemongo.api.bson.{ BSONDocument, BSONObjectID, BSONReader, BSONValue, _ }
+import reactivemongo.api.bson.Macros.Annotations.{ Ignore, Key }
 import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object Bson {
@@ -76,4 +78,27 @@ object Bson {
 
   def handler4[T](r: BSONValue => T, w: T => BSONValue) =
     reactivemongo.api.bson.BSONHandler[T](r, w)
+
+  type NonEmptyList[T] = ::[T]
+
+  object NonEmptyList {
+    def of[T](head: T, tail: T*): NonEmptyList[T] = ::(head, tail.toList)
+  }
+
+  def nonEmptyListHandler[T](
+    implicit
+    aHandler: BSONHandler[T]): BSONHandler[NonEmptyList[T]] = {
+    val reader = implicitly[BSONReader[List[T]]].afterRead[NonEmptyList[T]] {
+      case head :: tail => NonEmptyList.of(head, tail: _*)
+      case _ => throw new Exception("Expected a non empty list.")
+    }
+
+    def writer: BSONWriter[NonEmptyList[T]] = ???
+
+    BSONHandler.from[NonEmptyList[T]](reader.readTry, writer.writeTry)
+  }
+
+  case class Foo(
+    @Key("_name") name: String,
+    @Ignore age: Int)
 }
