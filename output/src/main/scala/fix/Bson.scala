@@ -9,6 +9,8 @@ import reactivemongo.api.bson.Macros.Annotations.{ Ignore, Key }
 import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object Bson {
+  def asStr(in: BSONString) = in.asOpt[String]
+
   @com.github.ghik.silencer.silent
   def foo(n: BSONDouble, v: BSONValue, d: BSONDocument, i: BSONObjectID) = BSONSerializationPack
 
@@ -78,6 +80,21 @@ object Bson {
 
   def handler4[T](r: BSONValue => T, w: T => BSONValue) =
     reactivemongo.api.bson.BSONHandler[T](r, w)
+
+  def handler5[T](
+    implicit
+    r: BSONDocumentReader[T], w: BSONDocumentWriter[T]) =
+    reactivemongo.api.bson.BSONDocumentHandler.from[T](r.readTry, w.writeTry)
+
+  def handler6[T](
+    implicit
+    r: BSONDocumentReader[T], w: BSONDocumentWriter[T]) =
+    BSONDocumentHandler.from(r.readTry, w.writeTry)
+
+  def handler7[T, B <: BSONValue](
+    implicit
+    r: BSONReader[T], w: BSONWriter[T]) =
+    BSONHandler.from(r.readTry, w.writeTry)
 
   type NonEmptyList[T] = ::[T]
 

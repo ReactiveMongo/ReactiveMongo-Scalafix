@@ -3,15 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-/* TODO:
-BSONValue.as ~> ???
-BSONDocumentHandler(underlying.readTry, writer.writeTry)
-
-
-/Users/cchantep/Projects/paperjam/server/app/guide/collections/OpLogCollection.scala:37:30: value :~ is not a member of scala.util.Try[reactivemongo.api.bson.BSONDocument]
-[error]       BSON.writeDocument(op) :~ (BSONFields.timestamp -> op.timestamp.getOrElse(Instant.now())
- */
-
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -40,8 +31,6 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     }
 
     { tree: Tree =>
-      //println(s"tree = ${tree.structure}")
-
       def recurse = Patch.fromIterable(tree.children.map(transformer))
 
       pipeline.lift(tree).map { p =>
@@ -53,6 +42,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Patch.empty
         }
       }.getOrElse {
+        //println(s"tree = ${tree.structure}")
+
         if (tree.children.nonEmpty) {
           recurse
         } else {
@@ -810,6 +801,12 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         }
       },
       refactor = {
+        case t @ Term.Select(v, Term.Name("as")) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/bson/BSON")) =>
+          Patch.replaceTree(t, s"${v.syntax}.asOpt")
+
+        // ---
+
         case t @ Term.Select(r, Term.Name("read")) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/bson/BSON")) =>
           Patch.replaceTree(t, s"${r.syntax}.readTry")
@@ -819,6 +816,27 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Patch.replaceTree(t, s"${r.syntax}.writeTry")
 
         // ---
+
+        case Term.Apply(n @ (Term.Name("BSONHandler") | Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+          Term.Name("BSONHandler"))), List(r, w)) => {
+
+          val safe = r.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/BSONReader#read")
+
+          val factory: String = n match {
+            case Term.Name("BSONHandler") => "BSONHandler"
+            case _ => "reactivemongo.api.bson.BSONHandler"
+          }
+
+          if (safe) {
+            (transformer(doc)(r) + transformer(doc)(w) + Patch.replaceTree(
+              n, s"${factory}.from")).atomic
+
+          } else {
+            Patch.replaceTree(n, s"${factory}")
+          }
+        }
 
         case Term.Apply(
           t @ Term.ApplyType(n @ (Term.Name("BSONHandler") | Term.Select(
@@ -839,6 +857,52 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
           } else {
             Patch.replaceTree(t, s"${factory}[${tpe}]")
+          }
+        }
+
+        case Term.Apply(
+          t @ Term.ApplyType(n @ (Term.Name(
+            "BSONDocumentHandler") | Term.Select(
+            Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+            Term.Name("BSONDocumentHandler"))),
+            List(tpe)), List(r, w)) => {
+
+          val safe = r.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/BSONReader#read")
+
+          val factory: String = n match {
+            case Term.Name("BSONDocumentHandler") => "BSONDocumentHandler"
+            case _ => "reactivemongo.api.bson.BSONDocumentHandler"
+          }
+
+          if (safe) {
+            (transformer(doc)(r) + transformer(doc)(w) + Patch.replaceTree(
+              t, s"${factory}.from[${tpe}]")).atomic
+
+          } else {
+            Patch.replaceTree(t, s"${factory}[${tpe}]")
+          }
+        }
+
+        case Term.Apply(n @ (Term.Name(
+          "BSONDocumentHandler") | Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+          Term.Name("BSONDocumentHandler"))), List(r, w)) => {
+
+          val safe = r.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/BSONReader#read")
+
+          val factory: String = n match {
+            case Term.Name("BSONDocumentHandler") => "BSONDocumentHandler"
+            case _ => "reactivemongo.api.bson.BSONDocumentHandler"
+          }
+
+          if (safe) {
+            (transformer(doc)(r) + transformer(doc)(w) + Patch.replaceTree(
+              n, s"${factory}.from")).atomic
+
+          } else {
+            Patch.replaceTree(n, factory)
           }
         }
 

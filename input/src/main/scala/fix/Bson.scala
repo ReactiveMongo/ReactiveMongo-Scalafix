@@ -16,6 +16,8 @@ import reactivemongo.api.BSONSerializationPack
 import reactivemongo.api.collections.bson.BSONCollection
 
 object Bson {
+  def asStr(in: BSONString) = in.as[String]
+
   @com.github.ghik.silencer.silent
   def foo(n: BSONDouble, v: BSONValue, d: BSONDocument, i: BSONObjectID) = BSONSerializationPack
 
@@ -85,6 +87,21 @@ object Bson {
 
   def handler4[T](r: BSONValue => T, w: T => BSONValue) =
     reactivemongo.bson.BSONHandler[BSONValue, T](r, w)
+
+  def handler5[T](
+    implicit
+    r: BSONDocumentReader[T], w: BSONDocumentWriter[T]) =
+    reactivemongo.bson.BSONDocumentHandler[T](r.read, w.write)
+
+  def handler6[T](
+    implicit
+    r: BSONDocumentReader[T], w: BSONDocumentWriter[T]) =
+    BSONDocumentHandler(r.read, w.write)
+
+  def handler7[T, B <: BSONValue](
+    implicit
+    r: BSONReader[B, T], w: BSONWriter[T, B]) =
+    BSONHandler(r.read, w.write)
 
   type NonEmptyList[T] = ::[T]
 
