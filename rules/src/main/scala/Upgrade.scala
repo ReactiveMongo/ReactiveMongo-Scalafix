@@ -3,8 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-// TODO: afterWriter => partial function
-
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -39,6 +37,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         if (p.patch.nonEmpty) {
           p.patch
         } else if (p.recurse && tree.children.nonEmpty) {
+          //println(s"==> ${tree.structure}")
+
           recurse
         } else {
           Patch.empty
@@ -781,9 +781,28 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
     })
 
+  private class AfterWrite(implicit doc: SemanticDocument) {
+    def unapply(tree: Tree): Option[Term] = {
+      if (!tree.symbol.info.exists(_.toString startsWith "reactivemongo/bson/BSONWriter")) {
+        None
+      } else tree match {
+        case Term.Select(w, Term.Name("afterWrite")) =>
+          Some(w)
+
+        case Term.ApplyType(Term.Select(w, Term.Name("afterWrite")), List(_)) =>
+          Some(w)
+
+        case _ =>
+          None
+      }
+    }
+  }
+
   private def bsonUpgrade(implicit doc: SemanticDocument) = {
     val apiPkg = Term.Select(Term.Select(
       Term.Name("reactivemongo"), Term.Name("api")), Term.Name("bson"))
+
+    val afterWrite = new AfterWrite
 
     Fix(
       `import` = {
@@ -871,6 +890,40 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           "WriteResult"), Term.Name("lastError")) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/commands/WriteResult")) =>
           Patch.replaceTree(t, s"WriteResult.Exception.unapply")
+
+        // ---
+
+        case Term.Apply(aw @ `afterWrite`(w),
+          List(body @ Term.PartialFunction(_))) if (
+          w.symbol.info.exists(
+            _.toString.indexOf("BSONDocumentWriter") == -1)) => {
+          val basePatch = Patch.replaceTree(aw, s"${w.syntax}.afterWrite")
+          val bodyPatch = transformer(doc)(body)
+
+          if (bodyPatch.nonEmpty) {
+            (basePatch + bodyPatch).atomic
+          } else {
+            basePatch
+          }
+        }
+
+        case Term.Apply(aw @ `afterWrite`(w), List(Term.Block(
+          List(Term.Function(List(p @ Term.Param(_, _, _, _)), body))))) if (
+          w.symbol.info.exists(
+            _.toString.indexOf("BSONDocumentWriter") == -1)) => {
+
+          val basePatch = (Patch.replaceTree(
+            aw, s"${w.syntax}.afterWrite") + Patch.replaceTree(
+            p, s"case ${p.syntax}"))
+
+          val bodyPatch = transformer(doc)(body)
+
+          if (bodyPatch.nonEmpty) {
+            (basePatch + bodyPatch).atomic
+          } else {
+            basePatch.atomic
+          }
+        }
 
         // ---
 

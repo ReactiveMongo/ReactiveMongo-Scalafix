@@ -12,6 +12,31 @@ import reactivemongo.api.bson.collection.BSONSerializationPack
 object Bson {
   def defaultHandlers = reactivemongo.api.bson.migrationRequired("DefaultBSONHandlers is no longer public; Rather use implicit resolution.") /* DefaultBSONHandlers.BSONBinaryHandler */
 
+  def afterWrite1[T](implicit w: BSONWriter[T]): BSONWriter[T] = w.afterWrite { case bson =>
+    (BSONDocument(f"$$string" -> bson) ++ ("_hash" -> bson.hashCode))
+  }
+
+  def afterWrite2[T](implicit w: BSONWriter[T]) =
+    w.afterWrite { case bson =>
+      BSONDocument(f"$$value" -> bson)
+    }
+
+  def afterWrite3[T](implicit w: BSONDocumentWriter[T]) =
+    w.afterWrite { doc =>
+      (doc ++ ("_hash" -> doc.hashCode))
+    }
+
+  def afterWrite4[T](implicit w: BSONWriter[T]): BSONWriter[T] = w.afterWrite {
+    case str @ BSONString(v) =>
+      (BSONDocument(f"$$string" -> str) ++ ("_len" -> v.size))
+
+    case int @ BSONInteger(_) =>
+      BSONDocument(f"$$int" -> int)
+
+    case _ =>
+      BSONDocument(f"$$undefined" -> 1)
+  }
+
   def asStr(in: BSONString) = in.asOpt[String]
 
   @com.github.ghik.silencer.silent

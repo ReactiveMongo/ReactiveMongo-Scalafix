@@ -24,6 +24,31 @@ import reactivemongo.api.collections.bson.BSONCollection
 object Bson {
   def defaultHandlers = DefaultBSONHandlers.BSONBinaryHandler
 
+  def afterWrite1[T](implicit w: BSONWriter[T, BSONString]): BSONWriter[T, BSONDocument] = w.afterWrite[BSONDocument] { bson =>
+    BSONDocument(f"$$string" -> bson) :~ ("_hash" -> bson.hashCode)
+  }
+
+  def afterWrite2[T](implicit w: BSONWriter[T, _ <: BSONValue]) =
+    w.afterWrite { bson =>
+      BSONDocument(f"$$value" -> bson)
+    }
+
+  def afterWrite3[T](implicit w: BSONDocumentWriter[T]) =
+    w.afterWrite { doc =>
+      doc :~ ("_hash" -> doc.hashCode)
+    }
+
+  def afterWrite4[T](implicit w: BSONWriter[T, _ <: BSONValue]): BSONWriter[T, BSONDocument] = w.afterWrite[BSONDocument] {
+    case str @ BSONString(v) =>
+      BSONDocument(f"$$string" -> str) :~ ("_len" -> v.size)
+
+    case int @ BSONInteger(_) =>
+      BSONDocument(f"$$int" -> int)
+
+    case _ =>
+      BSONDocument(f"$$undefined" -> 1)
+  }
+
   def asStr(in: BSONString) = in.as[String]
 
   @com.github.ghik.silencer.silent

@@ -51,6 +51,7 @@ lazy val output = project.in(file("output")).settings(
 
     val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> latestVer,
+      "reactivemongo-play-json-compat" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT",
       "play2-reactivemongo" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT")
 
     if (scalaBinaryVersion.value != "2.13") {
