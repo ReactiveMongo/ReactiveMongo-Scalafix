@@ -13,7 +13,7 @@ import reactivemongo.api.indexes.Index
 import com.github.ghik.silencer.silent
 import reactivemongo.api.{ AsyncDriver, CollectionStats, WriteConcern }
 import reactivemongo.api.bson.BSONDocument
-import reactivemongo.api.commands.CommandException
+import reactivemongo.api.commands.{ CommandException, WriteResult }
 import reactivemongo.core.actors.Exceptions.{ ChannelNotFoundException, NodeSetNotReachableException }
 
 object Commands {
@@ -52,6 +52,11 @@ object Commands {
     import reactivemongo.api.commands.WriteResult
     WriteResult.Exception.unapply(wr)
   }
+
+  def lastError4(e: WriteResult) = println(s"Error: $e")
+
+  def lastError5(
+    e: reactivemongo.api.commands.WriteResult) = println(s"Error: $e")
 }
 
 object Drv {

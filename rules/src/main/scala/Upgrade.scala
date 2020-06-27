@@ -6,11 +6,6 @@ import scala.meta._
 // TODO: afterWriter => partial function
 
 /* TODO:
-object LastError is not a member of package reactivemongo.api.commands
-[error] import reactivemongo.api.commands.{DefaultWriteResult, LastError, WriteResult}
- */
-
-/* TODO:
     import reactivemongo.play.json._
     import play.api.libs.json._
 
@@ -259,6 +254,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(cmdPkg, List(importee"CommandException")))).atomic
 
+          case i @ Importee.Name(Name.Indeterminate("LastError")) =>
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(cmdPkg, List(importee"WriteResult")))).atomic
+
           case i @ Importee.Name(Name.Indeterminate(
             "GetLastError" | "WriteConcern")) =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
@@ -360,6 +359,16 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
           Patch.replaceTree(t, s"${n.syntax}($argSyntax)")
         }
+
+        // ---
+
+        case t @ Type.Select(Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("commands")), Type.Name("LastError")) =>
+          Patch.replaceTree(t, "reactivemongo.api.commands.WriteResult")
+
+        case t @ Type.Name("LastError") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/LastError")) =>
+          Patch.replaceTree(t, "WriteResult")
 
         // ---
 

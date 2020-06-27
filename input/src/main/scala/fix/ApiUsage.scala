@@ -14,6 +14,7 @@ import reactivemongo.api.commands.{
 
 import reactivemongo.api.commands.{
   CommandError,
+  LastError,
   MultiBulkWriteResult,
   UpdateWriteResult
 }
@@ -62,6 +63,11 @@ object Commands {
     import reactivemongo.api.commands.WriteResult
     WriteResult.lastError(wr)
   }
+
+  def lastError4(e: LastError) = println(s"Error: $e")
+
+  def lastError5(
+    e: reactivemongo.api.commands.LastError) = println(s"Error: $e")
 }
 
 object Drv {
