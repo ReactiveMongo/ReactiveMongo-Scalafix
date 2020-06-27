@@ -5,7 +5,9 @@ package fix.play
 
 import scala.concurrent.Future
 
-import reactivemongo.play.json.JSONSerializationPack
+import reactivemongo.bson.BSONValue
+
+import reactivemongo.play.json.{ JSONSerializationPack, BSONFormats }
 
 import reactivemongo.play.json.collection.JSONCollection
 
@@ -29,4 +31,9 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
   def json1(coll: JSONCollection) = coll.name
 
   def json2(pack: JSONSerializationPack.type) = pack.toString
+
+  def toJson(v: BSONValue) =
+    reactivemongo.play.json.BSONFormats.toJSON(v)
+
+  def toBson(v: play.api.libs.json.JsValue) = BSONFormats.toBSON(v)
 }

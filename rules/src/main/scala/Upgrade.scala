@@ -5,14 +5,6 @@ import scala.meta._
 
 // TODO: afterWriter => partial function
 
-/* TODO:
-    import reactivemongo.play.json._
-    import play.api.libs.json._
-
-    implicit val jsReader =
-      BSONReader[JsValue](BSONFormats.toJSON(_))
- */
-
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -52,6 +44,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Patch.empty
         }
       }.getOrElse {
+        //println(s"tree = ${tree.structure}")
+
         if (tree.children.nonEmpty) {
           recurse
         } else {
@@ -719,6 +713,12 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
                 q"reactivemongo.api.bson.collection",
                 List(importee"BSONSerializationPack")))).atomic
 
+          case i @ Importee.Name(Name.Indeterminate("BSONFormats")) =>
+            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(
+                q"reactivemongo.play.json.compat",
+                List(importee"_")))).atomic
+
           case _ =>
         }
 
@@ -754,6 +754,31 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         Patch.replaceTree(
           p, s"gridFSBodyParser(Future.successful($gfs))($mat)")
 
+      // ---
+
+      case t @ Term.Select(Term.Name("BSONFormats"), Term.Name(n)) if (
+        t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/play/json")) => {
+        if (n == "toJSON") {
+          Patch.replaceTree(t, "ValueConverters.fromValue")
+        } else if (n == "toBSON") {
+          Patch.replaceTree(t, "ValueConverters.toValue")
+        } else {
+          Patch.empty
+        }
+      }
+
+      case t @ Term.Select(Term.Select(Term.Select(Term.Select(Term.Name(
+        "reactivemongo"), Term.Name("play")),
+        Term.Name("json")), Term.Name("BSONFormats")), Term.Name(n)) => {
+        if (n == "toJSON") {
+          Patch.replaceTree(t, "reactivemongo.play.json.compat.fromValue")
+        } else if (n == "toBSON") {
+          Patch.replaceTree(t, "reactivemongo.play.json.compat.toValue")
+        } else {
+          Patch.empty
+        }
+      }
     })
 
   private def bsonUpgrade(implicit doc: SemanticDocument) = {
