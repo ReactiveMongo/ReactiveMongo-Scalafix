@@ -3,6 +3,31 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
+// TODO: import reactivemongo.api.bson.bsonNumberLikeReader
+// TODO: import reactivemongo.api.bson.DefaultBSONHandlers
+// TODO: import reactivemongo.api.bson.BSONNumberLikeWriter
+
+// TODO: afterWriter => partial function
+
+/* TODO:
+object LastError is not a member of package reactivemongo.api.commands
+[error] import reactivemongo.api.commands.{DefaultWriteResult, LastError, WriteResult}
+ */
+
+/* TODO:
+    import reactivemongo.play.json._
+    import play.api.libs.json._
+
+    implicit val jsReader =
+      BSONReader[JsValue](BSONFormats.toJSON(_))
+ */
+
+/* TODO:
+value lastError is not a member of object reactivemongo.api.commands.WriteResult
+[error]                 WriteResult.lastError(res) match {
+~> WriteResult.Exception extractor
+ */
+
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -246,7 +271,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(cmdPkg, List(importee"CommandException")))).atomic
 
-          case i @ Importee.Name(Name.Indeterminate("WriteConcern")) =>
+          case i @ Importee.Name(Name.Indeterminate(
+            "GetLastError" | "WriteConcern")) =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(apiPkg, List(importee"WriteConcern")))).atomic
 
@@ -349,10 +375,18 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Type.Name("Index") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/indexes/Index")) =>
-          Patch.replaceTree(t, "Index.Default")
+        case t @ Type.Select(Term.Select(
+          Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("commands")), Type.Name("GetLastError")) =>
+          Patch.replaceTree(t, "reactivemongo.api.WriteConcern")
+
+        case t @ Type.Name("GetLastError") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/GetLastError")) =>
+          Patch.replaceTree(t, "WriteConcern")
 
         // ---
+
+        case t @ Type.Name("Index") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/indexes/Index")) =>
+          Patch.replaceTree(t, "Index.Default")
 
         case t @ Term.Name("CommandError") if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/CommandError")) =>
           Patch.replaceTree(t, "CommandException")

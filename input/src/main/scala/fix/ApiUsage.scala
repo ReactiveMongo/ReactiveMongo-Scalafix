@@ -6,7 +6,11 @@ package fix
 import scala.concurrent.{ ExecutionContext, Future }
 
 import reactivemongo.api.{ MongoDriver, MongoConnection, QueryOpts }
-import reactivemongo.api.commands.{ CollStatsResult, WriteConcern }
+import reactivemongo.api.commands.{
+  CollStatsResult,
+  GetLastError,
+  WriteConcern
+}
 
 import reactivemongo.api.commands.{
   CommandError,
@@ -46,6 +50,10 @@ object Commands {
 
   def index2: Index = reactivemongo.api.indexes.Index(
     Seq.empty, name = Some("foo"), false, false, false, version = Some(1))
+
+  def withLastError1(arg: Option[GetLastError]): Unit = println(arg.mkString)
+
+  def lastError1(): reactivemongo.api.commands.GetLastError = ???
 }
 
 object Drv {
