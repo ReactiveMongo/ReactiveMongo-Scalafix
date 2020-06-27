@@ -5,14 +5,19 @@ package fix
 
 import reactivemongo.api.bson.collection.BSONCollection
 import reactivemongo.api.bson.{ BSONDocument, BSONObjectID, BSONReader, BSONValue, _ }
+import reactivemongo.api.bson.BSONObjectID.{generate => generateId}
 import reactivemongo.api.bson.Macros.Annotations.{ Ignore, Key }
 import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object Bson {
+  def defaultHandlers = reactivemongo.api.bson.migrationRequired("DefaultBSONHandlers is no longer public; Rather use implicit resolution.") /* DefaultBSONHandlers.BSONBinaryHandler */
+
   def asStr(in: BSONString) = in.asOpt[String]
 
   @com.github.ghik.silencer.silent
   def foo(n: BSONDouble, v: BSONValue, d: BSONDocument, i: BSONObjectID) = BSONSerializationPack
+
+  def oid(): BSONObjectID = generateId()
 
   def bar(doc: reactivemongo.api.bson.BSONDocument): Option[Int] =
     (BSONDocument(("foo" -> 0)) ++ doc).getAsOpt[BSONNumberLike]("_i").flatMap { _.toInt.toOption }

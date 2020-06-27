@@ -5,7 +5,13 @@ package fix
 
 import reactivemongo.bson._
 import reactivemongo.bson.BSONValue
-import reactivemongo.bson.{ BSONDocument, BSONObjectID, BSONReader }
+import reactivemongo.bson.{
+  BSONDocument,
+  BSONObjectID,
+  BSONReader,
+  DefaultBSONHandlers
+}
+import reactivemongo.bson.BSONObjectID.{ generate => generateId }
 
 import reactivemongo.bson.DefaultBSONHandlers._
 
@@ -16,10 +22,14 @@ import reactivemongo.api.BSONSerializationPack
 import reactivemongo.api.collections.bson.BSONCollection
 
 object Bson {
+  def defaultHandlers = DefaultBSONHandlers.BSONBinaryHandler
+
   def asStr(in: BSONString) = in.as[String]
 
   @com.github.ghik.silencer.silent
   def foo(n: BSONDouble, v: BSONValue, d: BSONDocument, i: BSONObjectID) = BSONSerializationPack
+
+  def oid(): BSONObjectID = generateId()
 
   def bar(doc: reactivemongo.bson.BSONDocument): Option[Int] =
     (("foo" -> 0) ~: doc).getAs[BSONNumberLike]("_i").map(_.toInt)

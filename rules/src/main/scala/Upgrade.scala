@@ -3,10 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-// TODO: import reactivemongo.api.bson.bsonNumberLikeReader
-// TODO: import reactivemongo.api.bson.DefaultBSONHandlers
-// TODO: import reactivemongo.api.bson.BSONNumberLikeWriter
-
 // TODO: afterWriter => partial function
 
 /* TODO:
@@ -770,13 +766,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             _.toString startsWith "reactivemongo/bson/Macros")) => {
           val m = Term.Select(apiPkg, Term.Name("Macros"))
 
-          Patch.fromIterable(is.flatMap {
+          Patch.fromIterable(is.map {
             case i @ Importee.Name(Name.Indeterminate("Annotations")) =>
-              Seq(Patch.removeImportee(i))
+              Patch.removeImportee(i)
 
             case i =>
-              Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-                Importer(m, List(i)))).atomic)
+              (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(m, List(i)))).atomic
           })
         }
 
@@ -785,9 +781,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             _.toString startsWith "reactivemongo/bson/Macros")) => {
           val pkg = Term.Select(Term.Select(apiPkg, Term.Name("Macros")), m)
 
-          Patch.fromIterable(is.flatMap { i =>
-            Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(pkg, List(i)))).atomic)
+          Patch.fromIterable(is.map { i =>
+            (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(pkg, List(i)))).atomic
           })
         }
 
@@ -796,9 +792,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             _.toString startsWith "reactivemongo/bson/Macros.Annotations")) => {
           val m = Term.Select(Term.Select(apiPkg, Term.Name("Macros")), n)
 
-          Patch.fromIterable(is.flatMap { i =>
-            Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(m, List(i)))).atomic)
+          Patch.fromIterable(is.map { i =>
+            (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(m, List(i)))).atomic
           })
         }
 
@@ -807,9 +803,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         case Importer(Term.Select(
           Term.Name("reactivemongo"), Term.Name("bson")), is) => {
 
-          Patch.fromIterable(is.flatMap { i =>
-            Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(apiPkg, List(i)))).atomic)
+          Patch.fromIterable(is.map {
+            case i @ Importee.Name(Name.Indeterminate("DefaultBSONHandlers")) =>
+              Patch.removeImportee(i)
+
+            case i =>
+              (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(apiPkg, List(i)))).atomic
           })
         }
 
@@ -817,9 +817,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Term.Name("reactivemongo"), Term.Name("bson")),
           Term.Name("DefaultBSONHandlers")), is) => {
 
-          Patch.fromIterable(is.flatMap { i =>
-            Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(apiPkg, List(i)))).atomic)
+          Patch.fromIterable(is.map { i =>
+            (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(apiPkg, List(i)))).atomic
           })
         }
 
@@ -828,9 +828,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
           val pkg = Term.Select(apiPkg, x)
 
-          Patch.fromIterable(is.flatMap { i =>
-            Seq((Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(pkg, List(i)))).atomic)
+          Patch.fromIterable(is.map { i =>
+            (Patch.removeImportee(i) + Patch.addGlobalImport(
+              Importer(pkg, List(i)))).atomic
           })
         }
       },
@@ -991,8 +991,20 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Type.Select(
-          Term.Select(Term.Name("reactivemongo"), Term.Name("bson")), Type.Name(n)
+        case t @ Term.Select(Term.Name("DefaultBSONHandlers"), _) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/DefaultBSONHandlers")) =>
+          migrationRequired(t, "DefaultBSONHandlers is no longer public; Rather use implicit resolution.")
+
+        case t @ Term.Name("DefaultBSONHandlers") if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/DefaultBSONHandlers")) =>
+          migrationRequired(t, "DefaultBSONHandlers is no longer public; Rather use implicit resolution.")
+
+        // ---
+
+        case t @ Type.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("bson")), Type.Name(n)
           ) if (!Seq("BSONReader", "BSONHandler", "BSONWriter").contains(n)) =>
           Patch.replaceTree(t, s"reactivemongo.api.bson.$n")
 
