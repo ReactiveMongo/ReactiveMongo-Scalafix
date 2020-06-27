@@ -18,12 +18,6 @@ object LastError is not a member of package reactivemongo.api.commands
       BSONReader[JsValue](BSONFormats.toJSON(_))
  */
 
-/* TODO:
-value lastError is not a member of object reactivemongo.api.commands.WriteResult
-[error]                 WriteResult.lastError(res) match {
-~> WriteResult.Exception extractor
- */
-
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -63,8 +57,6 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Patch.empty
         }
       }.getOrElse {
-        //println(s"tree = ${tree.structure}")
-
         if (tree.children.nonEmpty) {
           recurse
         } else {
@@ -835,6 +827,19 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         }
       },
       refactor = {
+        case t @ Term.Select(companion @ Term.Select(Term.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("api")),
+          Term.Name("commands")), Term.Name("WriteResult")
+          ), Term.Name("lastError")) =>
+          Patch.replaceTree(t, s"${companion.syntax}.Exception.unapply")
+
+        case t @ Term.Select(Term.Name(
+          "WriteResult"), Term.Name("lastError")) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/commands/WriteResult")) =>
+          Patch.replaceTree(t, s"WriteResult.Exception.unapply")
+
+        // ---
+
         case t @ Term.Select(v, Term.Name("as")) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/bson/BSON")) =>
           Patch.replaceTree(t, s"${v.syntax}.asOpt")

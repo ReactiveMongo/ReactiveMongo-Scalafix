@@ -54,6 +54,14 @@ object Commands {
   def withLastError1(arg: Option[GetLastError]): Unit = println(arg.mkString)
 
   def lastError1(): reactivemongo.api.commands.GetLastError = ???
+
+  def lastError2(wr: reactivemongo.api.commands.WriteResult) =
+    reactivemongo.api.commands.WriteResult.lastError(wr)
+
+  def lastError3(wr: reactivemongo.api.commands.WriteResult) = {
+    import reactivemongo.api.commands.WriteResult
+    WriteResult.lastError(wr)
+  }
 }
 
 object Drv {

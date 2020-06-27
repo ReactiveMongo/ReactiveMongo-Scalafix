@@ -44,6 +44,14 @@ object Commands {
   def withLastError1(arg: Option[WriteConcern]): Unit = println(arg.mkString)
 
   def lastError1(): reactivemongo.api.WriteConcern = ???
+
+  def lastError2(wr: reactivemongo.api.commands.WriteResult) =
+    reactivemongo.api.commands.WriteResult.Exception.unapply(wr)
+
+  def lastError3(wr: reactivemongo.api.commands.WriteResult) = {
+    import reactivemongo.api.commands.WriteResult
+    WriteResult.Exception.unapply(wr)
+  }
 }
 
 object Drv {
