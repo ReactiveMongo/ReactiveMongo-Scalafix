@@ -1,6 +1,6 @@
 package fix.play
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 
 
 
@@ -17,6 +17,10 @@ import reactivemongo.api.bson.collection.{ BSONCollection, BSONSerializationPack
 import reactivemongo.play.json.compat._
 
 trait Controller extends MongoController { self: ReactiveMongoComponents =>
+  @silent def unused = {
+    ()
+  }
+
   @silent
   def foo(gfs: GridFS) = gridFSBodyParser(Future.successful(gfs))(null)
 
@@ -34,4 +38,18 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
     reactivemongo.play.json.compat.fromValue(v)
 
   def toBson(v: play.api.libs.json.JsValue) = ValueConverters.toValue(v)
+
+  type JP = reactivemongo.api.bson.collection.BSONSerializationPack.type
+
+  def jp = reactivemongo.api.bson.collection.BSONSerializationPack
+}
+
+object PlayGridFS {
+  import reactivemongo.api.gridfs.GridFS
+
+  def resolve(database: Future[reactivemongo.api.DB])(
+    implicit
+    ec: ExecutionContext): Future[GridFS[_]] =
+    database.map(db =>
+      db.gridfs)
 }

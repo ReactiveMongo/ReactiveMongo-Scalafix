@@ -3,6 +3,25 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
+/* TODO:
+[error]   (ordered: Boolean,bypassDocumentValidation: Boolean)x$8.UpdateBuilder <and>
+[error]   (ordered: Boolean,writeConcern: reactivemongo.api.WriteConcern)x$8.UpdateBuilder
+[error]  cannot be applied to (play.api.libs.json.JsObject, <error>)
+[error]         collection.flatMap(_.update(Json.obj("_id" -> id), modifier).
+ */
+
+/* TODO:
+overloaded method value insert with alternatives:
+[error]   (ordered: Boolean,writeConcern: reactivemongo.api.WriteConcern,bypassDocumentValidation: Boolean)x$6.InsertBuilder <and>
+[error]   (ordered: Boolean,bypassDocumentValidation: Boolean)x$6.InsertBuilder <and>
+[error]   (ordered: Boolean,writeConcern: reactivemongo.api.WriteConcern)x$6.InsertBuilder <and>
+[error]   (writeConcern: reactivemongo.api.WriteConcern)x$6.InsertBuilder <and>
+[error]   (ordered: Boolean)x$6.InsertBuilder <and>
+[error]   => x$6.InsertBuilder
+[error]  cannot be applied to (models.Article)
+[error]       article => collection.flatMap(_.insert(article.copy(
+ */
+
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -37,8 +56,6 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         if (p.patch.nonEmpty) {
           p.patch
         } else if (p.recurse && tree.children.nonEmpty) {
-          //println(s"==> ${tree.structure}")
-
           recurse
         } else {
           Patch.empty
@@ -669,6 +686,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
               Importer(x, List(importee"GridFS")))).atomic
 
+          case i @ Importee.Name(Name.Indeterminate("readFileReads")) =>
+            patches += Patch.removeImportee(i)
+
           case _ =>
         }
 
@@ -693,7 +713,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
                 q"reactivemongo.api.bson.collection",
                 List(importee"BSONCollection")))).atomic
 
-          case _ =>
+          case i =>
+            patches += Patch.removeImportee(i)
         }
 
         Patch.fromIterable(patches.result())
@@ -728,10 +749,29 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     refactor = {
       case n @ Type.Name("JSONCollection") if (n.symbol.info.exists(
         _.toString startsWith "reactivemongo/play/json/collection/")) =>
-        Patch.replaceTree(n, "BSONCollection")
+        (Patch.replaceTree(n, "BSONCollection") + Patch.addGlobalImport(
+          Importer( // In case JSONCollection was coming from _ import
+            q"reactivemongo.api.bson.collection",
+            List(importee"BSONCollection")))).atomic
+
+      case t @ Term.Select(Term.Select(Term.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("play")),
+        Term.Name("json")), Term.Name("collection")),
+        Term.Name("JSONCollection")) =>
+        Patch.replaceTree(t, "reactivemongo.api.bson.collection.BSONCollection")
 
       case n @ Type.Singleton(Term.Name("JSONSerializationPack")) =>
-        Patch.replaceTree(n, "BSONSerializationPack.type")
+        (Patch.replaceTree(
+          n, "BSONSerializationPack.type") + Patch.addGlobalImport(
+          Importer( // In case JSONSerializationPack was coming from _ import
+            q"reactivemongo.api.bson.collection",
+            List(importee"BSONSerializationPack")))).atomic
+
+      case t @ Term.Select(Term.Select(Term.Select(
+        Term.Name("reactivemongo"), Term.Name("play")),
+        Term.Name("json")), Term.Name("JSONSerializationPack")) =>
+        Patch.replaceTree(
+          t, "reactivemongo.api.bson.collection.BSONSerializationPack")
 
       case n @ Type.Name("JsGridFS") =>
         Patch.replaceTree(n, "GridFS")
@@ -1252,13 +1292,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
 
       {
-        case gridfsRes @ Term.Apply(
-          Term.ApplyType(
-            GridFSTermName(),
-            List(Type.Singleton(Term.Name("BSONSerializationPack")))
-            ),
-          List(Term.Name(db))
-          ) =>
+        case gridfsRes @ Term.Apply(Term.ApplyType(
+          GridFSTermName(), List(_)), List(Term.Name(db))) =>
           Patch.replaceTree(gridfsRes, s"${db}.gridfs")
 
         case gridfsRes @ Term.Apply(
@@ -1272,11 +1307,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case readFileTpe @ Type.Apply(
-          ReadFileTypeLike(),
-          List(
-            Type.Singleton(Term.Name("BSONSerializationPack")), idTpe)
-          ) =>
+        case readFileTpe @ Type.Apply(ReadFileTypeLike(), List(_, idTpe)) =>
           Patch.replaceTree(
             readFileTpe,
             s"ReadFile[${idTpe.syntax}, reactivemongo.api.bson.BSONDocument]")

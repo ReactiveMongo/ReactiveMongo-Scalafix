@@ -3,7 +3,7 @@ rule = ReactiveMongoUpgrade
 */
 package fix.play
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 
 import reactivemongo.bson.BSONValue
 
@@ -19,6 +19,11 @@ import play.modules.reactivemongo.{
 import com.github.ghik.silencer.silent
 
 trait Controller extends MongoController { self: ReactiveMongoComponents =>
+  @silent def unused = {
+    import MongoController.readFileReads
+    ()
+  }
+
   @silent
   def foo(gfs: JsGridFS) = gridFSBodyParser(gfs)(null, null, null)
 
@@ -36,4 +41,19 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
     reactivemongo.play.json.BSONFormats.toJSON(v)
 
   def toBson(v: play.api.libs.json.JsValue) = BSONFormats.toBSON(v)
+
+  type JP = reactivemongo.play.json.JSONSerializationPack.type
+
+  def jp = reactivemongo.play.json.JSONSerializationPack
+}
+
+object PlayGridFS {
+  import reactivemongo.api.gridfs.GridFS
+  import reactivemongo.play.json.collection._
+
+  def resolve(database: Future[reactivemongo.api.DefaultDB])(
+    implicit
+    ec: ExecutionContext): Future[GridFS[_]] =
+    database.map(db =>
+      GridFS[JSONSerializationPack.type](db))
 }
