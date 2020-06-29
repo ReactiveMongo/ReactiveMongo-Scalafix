@@ -5,6 +5,8 @@ package fix.play
 
 import scala.concurrent.{ ExecutionContext, Future }
 
+import play.api.libs.json._
+
 import reactivemongo.bson.BSONValue
 
 import reactivemongo.play.json.{ JSONSerializationPack, BSONFormats }
@@ -47,6 +49,9 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
   def jp = reactivemongo.play.json.JSONSerializationPack
 
   def inline = CONTENT_DISPOSITION_INLINE
+
+  @silent(".*dead\\ code.*")
+  def fs1 = serve[JsString, reactivemongo.api.gridfs.ReadFile[JSONSerializationPack.type, JsString]](???)(???)(???)
 }
 
 object PlayGridFS {

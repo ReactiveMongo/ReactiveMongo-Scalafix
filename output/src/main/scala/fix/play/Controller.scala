@@ -2,6 +2,8 @@ package fix.play
 
 import scala.concurrent.{ ExecutionContext, Future }
 
+import play.api.libs.json._
+
 
 
 
@@ -45,6 +47,9 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
   def jp = reactivemongo.api.bson.collection.BSONSerializationPack
 
   def inline = "inline"
+
+  @silent(".*dead\\ code.*")
+  def fs1 = serve[reactivemongo.api.bson.BSONValue](???)(???)(???)
 }
 
 object PlayGridFS {

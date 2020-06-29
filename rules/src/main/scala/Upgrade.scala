@@ -3,14 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-/* TODO:
-wrong number of type parameters for method serve: [Id <: reactivemongo.api.bson.BSONValue](gfs: play.modules.reactivemongo.MongoController.GridFS)(foundFile: reactivemongo.api.Cursor[gfs.ReadFile[Id]], dispositionMode: String)(implicit materializer: akka.stream.Materializer)scala.concurrent.Future[play.api.mvc.Result]
-[error]         case _            => serve[JsString, JSONReadFile](fs)(file)
-
-serve[BSONValue]
-+ import BSONValue
- */
-
 /* TODO: gridfs.find[JsObject, JSONReadFile] ~>
 gridfs[BSONDocument, BSONValue]
 + import BSONDocument, BSONValue
@@ -751,6 +743,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
     },
     refactor = {
+      case t @ Term.ApplyType(Term.Name("serve"), List(_, _)) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
+        Patch.replaceTree(t, "serve[reactivemongo.api.bson.BSONValue]")
+
       case t @ Init(Type.Name("MongoController"), _, _) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
         (Patch.addGlobalImport(Importer(
           q"reactivemongo.play.json.compat", List(importee"_"))) + Patch.
