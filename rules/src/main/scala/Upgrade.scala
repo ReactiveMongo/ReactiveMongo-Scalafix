@@ -3,15 +3,9 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-/* TODO: gridfs.find[JsObject, JSONReadFile] ~>
-gridfs[BSONDocument, BSONValue]
-+ import BSONDocument, BSONValue
- */
-
-/* TODO: MongoController JSONReadFile
- */
-
-/* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[ */
+/* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[
+files.update
+*/
 
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
@@ -1301,6 +1295,29 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
 
       {
+        case t @ Term.Apply(call, List(a, b, _, c)) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) => {
+
+          val basePatch = Patch.replaceTree(
+            t, s"(${a.syntax}, ${b.syntax}, ${c.syntax})")
+
+          val callPatch = transformer(doc)(call)
+
+          if (callPatch.nonEmpty) {
+            (callPatch + basePatch).atomic
+          } else {
+            basePatch
+          }
+        }
+
+        case t @ Term.Apply(Term.ApplyType(Term.Select(
+          fs, Term.Name("find")), List(_, _)), List(id)) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) =>
+          Patch.replaceTree(t, s"${fs.syntax}.find[reactivemongo.api.bson.BSONDocument, reactivemongo.api.bson.BSONValue](${id.syntax})")
+
+        // ---
+
         case gridfsRes @ Term.Apply(Term.ApplyType(
           GridFSTermName(), List(_)), List(Term.Name(db))) =>
           Patch.replaceTree(gridfsRes, s"${db}.gridfs")
