@@ -73,11 +73,11 @@ object Coll {
 
   @silent def rename1(coll: GenericCollection[_])(
     implicit
-    ec: ExecutionContext) = coll.db.connection.database("admin").flatMap(_.renameCollection(coll.db.name, coll.name, "foo"))
+    ec: ExecutionContext) = { val coll1 = coll; coll1.db.connection.database("admin").flatMap(_.renameCollection(coll1.db.name, coll1.name, "foo")) }
 
   @silent def rename2(coll: BSONCollection)(
     implicit
-    ec: ExecutionContext) = coll.db.connection.database("admin").flatMap(_.renameCollection(coll.db.name, coll.name, "foo", false))
+    ec: ExecutionContext) = { val coll2 = coll; coll2.db.connection.database("admin").flatMap(_.renameCollection(coll2.db.name, coll2.name, "foo", false)) }
 
   def query1(coll: BSONCollection) = {
     val qry = coll.find(BSONDocument.empty, Some(BSONDocument("bar" -> 1))).
@@ -137,12 +137,22 @@ object Coll {
     wc: WriteConcern)(implicit ec: ExecutionContext) =
     coll.insert(writeConcern = wc).one[BSONDocument](BSONDocument("bar" -> 1))
 
+  def insert3(coll: Future[BSONCollection], doc: BSONDocument)(
+    implicit
+    ec: ExecutionContext) = coll.flatMap(_.insert.one(doc))
+
   def update1(coll: BSONCollection)(implicit ec: ExecutionContext) =
     coll.update.one[BSONDocument, BSONDocument](q = BSONDocument("foo" -> 1), u = BSONDocument("bar" -> "lorem"))
 
   def update2(coll: BSONCollection, wc: WriteConcern)(
     implicit
     ec: ExecutionContext) = coll.update(writeConcern = wc).one(q = BSONDocument("foo" -> 1), u = BSONDocument("bar" -> "lorem"), upsert = true, multi = false)
+
+  def update3(
+    coll: Future[BSONCollection],
+    id: String,
+    modifier: BSONDocument)(implicit ec: ExecutionContext) =
+    coll.flatMap(_.update.one(q = BSONDocument("_id" -> id), u = modifier))
 
   @silent def unboxedCmd1[R <: Int, C <: reactivemongo.api.commands.Command with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C)(implicit ec: ExecutionContext) = coll.runner.apply[R, C](coll.db, cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
 

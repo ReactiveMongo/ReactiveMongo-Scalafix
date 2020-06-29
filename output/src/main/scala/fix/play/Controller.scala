@@ -15,6 +15,7 @@ import MongoController.GridFS
 import reactivemongo.api.bson.BSONValue
 import reactivemongo.api.bson.collection.{ BSONCollection, BSONSerializationPack }
 import reactivemongo.play.json.compat._
+import reactivemongo.play.json.compat.json2bson._
 
 trait Controller extends MongoController { self: ReactiveMongoComponents =>
   @silent def unused = {
@@ -42,6 +43,8 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
   type JP = reactivemongo.api.bson.collection.BSONSerializationPack.type
 
   def jp = reactivemongo.api.bson.collection.BSONSerializationPack
+
+  def inline = "inline"
 }
 
 object PlayGridFS {

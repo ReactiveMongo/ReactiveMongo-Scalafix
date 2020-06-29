@@ -45,6 +45,8 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
   type JP = reactivemongo.play.json.JSONSerializationPack.type
 
   def jp = reactivemongo.play.json.JSONSerializationPack
+
+  def inline = CONTENT_DISPOSITION_INLINE
 }
 
 object PlayGridFS {

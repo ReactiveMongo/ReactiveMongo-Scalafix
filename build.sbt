@@ -45,13 +45,13 @@ lazy val output = project.in(file("output")).settings(
   sources in Compile ~= {
     _.filterNot(_.getName endsWith "RequireMigration.scala")
   },
+  scalacOptions += "-P:silencer:globalFilters=.*Unused\\ import.*",
   libraryDependencies ++= {
     val latestVer = "1.0.0-rc.1-SNAPSHOT"
     val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
 
     val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> latestVer,
-      "reactivemongo-play-json-compat" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT",
       "play2-reactivemongo" -> s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT")
 
     if (scalaBinaryVersion.value != "2.13") {

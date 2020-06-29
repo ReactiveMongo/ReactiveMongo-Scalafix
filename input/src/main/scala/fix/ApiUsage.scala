@@ -154,6 +154,10 @@ object Coll {
       writeConcern = wc,
       document = BSONDocument("bar" -> 1))
 
+  def insert3(coll: Future[BSONCollection], doc: BSONDocument)(
+    implicit
+    ec: ExecutionContext) = coll.flatMap(_.insert(doc))
+
   def update1(coll: BSONCollection)(implicit ec: ExecutionContext) =
     coll.update[BSONDocument, BSONDocument](
       BSONDocument("foo" -> 1), BSONDocument("bar" -> "lorem"))
@@ -166,6 +170,12 @@ object Coll {
     selector = BSONDocument("foo" -> 1),
     multi = false,
     upsert = true)
+
+  def update3(
+    coll: Future[BSONCollection],
+    id: String,
+    modifier: BSONDocument)(implicit ec: ExecutionContext) =
+    coll.flatMap(_.update(BSONDocument("_id" -> id), modifier))
 
   @silent def unboxedCmd1[R <: reactivemongo.api.commands.BoxedAnyVal[Int], C <: reactivemongo.api.commands.Command with reactivemongo.api.commands.CommandWithResult[R]](coll: BSONCollection, cmd: C)(implicit ec: ExecutionContext) = coll.runner.unboxed[Int, R, C](coll.db, cmd, reactivemongo.api.ReadPreference.primary)(???, ???, ec)
 
