@@ -50,6 +50,12 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
 
   @silent(".*dead\\ code.*")
   def fs1 = serve[reactivemongo.api.bson.BSONValue](???)(???)(???)
+
+  @silent
+  def fs2(id: String, fs: GridFS)(implicit m: akka.stream.Materializer) = {
+    import m.executionContext
+    serve[reactivemongo.api.bson.BSONValue](fs)(???)
+  }
 }
 
 object PlayGridFS {

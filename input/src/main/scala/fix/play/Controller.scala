@@ -52,6 +52,12 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
 
   @silent(".*dead\\ code.*")
   def fs1 = serve[JsString, reactivemongo.api.gridfs.ReadFile[JSONSerializationPack.type, JsString]](???)(???)(???)
+
+  @silent
+  def fs2(id: String, fs: JsGridFS)(implicit m: akka.stream.Materializer) = {
+    import m.executionContext
+    serve[JsString, MongoController.JsReadFile[JsString]](fs)(???)
+  }
 }
 
 object PlayGridFS {

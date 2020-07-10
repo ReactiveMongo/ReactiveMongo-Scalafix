@@ -29,4 +29,5 @@ object Compatible {
   @com.github.ghik.silencer.silent
   def find(gridfs: GridFS[BSONSerializationPack.type]) =
     gridfs.find[BSONDocument, ReadFile[BSONSerializationPack.type, BSONValue]](???)(???, ???, ???, ???)
+
 }

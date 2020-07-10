@@ -27,4 +27,5 @@ object Compatible {
   @com.github.ghik.silencer.silent
   def find(gridfs: GridFS[BSONSerializationPack.type]) =
     gridfs.find[reactivemongo.api.bson.BSONDocument, reactivemongo.api.bson.BSONValue](???)(???, ???, ???)
+
 }

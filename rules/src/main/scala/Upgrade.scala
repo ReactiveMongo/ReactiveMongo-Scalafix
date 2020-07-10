@@ -3,6 +3,8 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
+// TODO: JsGridFS => GridFS
+
 /* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[
 files.update
 */
@@ -664,165 +666,197 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
     })
 
-  private def playUpgrade(implicit doc: SemanticDocument) = Fix(
-    `import` = {
-      case Importer(
-        x @ Term.Name("MongoController"), importees
-        ) if (x.symbol.toString startsWith "play/modules/reactivemongo/") => {
-        val patches = Seq.newBuilder[Patch]
+  private def playUpgrade(implicit doc: SemanticDocument) = {
+    object GridFSServe {
+      def unapply(t: Tree): Option[Tree] = find(t, false)
 
-        importees.foreach {
-          case i @ Importee.Name(Name.Indeterminate("JsGridFS")) =>
-            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(x, List(importee"GridFS")))).atomic
+      @annotation.tailrec
+      private def find(t: Tree, ctrl: Boolean): Option[Tree] = t match {
+        case x @ Term.Apply(fn, _) if (x.symbol.info.exists(
+          _.toString startsWith (
+            "play/modules/reactivemongo/MongoController"))) =>
+          find(fn, true)
 
-          case i @ Importee.Name(Name.Indeterminate("readFileReads")) =>
-            patches += Patch.removeImportee(i)
+        case t @ Term.ApplyType(Term.Name("serve"), _) if ctrl =>
+          Some(t)
 
-          case _ =>
+        case a @ Term.ApplyType(Term.Name("serve"), _) =>
+          a.symbol.info.map(_.signature).flatMap {
+            case ClassSignature(_, parents, _, _) => parents.collectFirst {
+              case TypeRef(_, sym, _) if (sym.toString.startsWith(
+                "play/modules/reactivemongo/MongoController")) => a
+
+            }
+
+            case _ => Option.empty[Tree]
+          }
+
+        case _ => None
+      }
+    }
+
+    Fix(
+      `import` = {
+        case Importer(
+          x @ Term.Name("MongoController"), importees
+          ) if (x.symbol.toString startsWith "play/modules/reactivemongo/") => {
+          val patches = Seq.newBuilder[Patch]
+
+          importees.foreach {
+            case i @ Importee.Name(Name.Indeterminate("JsGridFS")) =>
+              patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(x, List(importee"GridFS")))).atomic
+
+            case i @ Importee.Name(Name.Indeterminate("readFileReads")) =>
+              patches += Patch.removeImportee(i)
+
+            case _ =>
+          }
+
+          Patch.fromIterable(patches.result())
         }
 
-        Patch.fromIterable(patches.result())
-      }
+        case Importer(
+          Term.Select(
+            Term.Select(
+              Term.Select(Term.Name("reactivemongo"), Term.Name("play")),
+              Term.Name("json")
+              ),
+            Term.Name("collection")
+            ),
+          importees) => {
+          val patches = Seq.newBuilder[Patch]
 
-      case Importer(
-        Term.Select(
+          importees.foreach {
+            case i @ Importee.Name(Name.Indeterminate("JSONCollection")) =>
+              patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(
+                  q"reactivemongo.api.bson.collection",
+                  List(importee"BSONCollection")))).atomic
+
+            case i =>
+              patches += Patch.removeImportee(i)
+          }
+
+          Patch.fromIterable(patches.result())
+        }
+
+        case Importer(
           Term.Select(
             Term.Select(Term.Name("reactivemongo"), Term.Name("play")),
             Term.Name("json")
-            ),
-          Term.Name("collection")
-          ),
-        importees) => {
-        val patches = Seq.newBuilder[Patch]
+            ), importees) => {
+          val patches = Seq.newBuilder[Patch]
 
-        importees.foreach {
-          case i @ Importee.Name(Name.Indeterminate("JSONCollection")) =>
-            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(
-                q"reactivemongo.api.bson.collection",
-                List(importee"BSONCollection")))).atomic
+          importees.foreach {
+            case i @ Importee.Name(Name.Indeterminate("JSONSerializationPack")) =>
+              patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(
+                  q"reactivemongo.api.bson.collection",
+                  List(importee"BSONSerializationPack")))).atomic
 
-          case i =>
-            patches += Patch.removeImportee(i)
+            case i @ Importee.Name(Name.Indeterminate("BSONFormats")) =>
+              patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
+                Importer(
+                  q"reactivemongo.play.json.compat",
+                  List(importee"_")))).atomic
+
+            case _ =>
+          }
+
+          Patch.fromIterable(patches.result())
+        }
+      },
+      refactor = {
+        case GridFSServe(a) =>
+          Patch.replaceTree(a, "serve[reactivemongo.api.bson.BSONValue]")
+
+        // ---
+
+        case t @ Init(Type.Name("MongoController"), _, _) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
+          (Patch.addGlobalImport(Importer(
+            q"reactivemongo.play.json.compat", List(importee"_"))) + Patch.
+            addGlobalImport(Importer(
+              q"reactivemongo.play.json.compat.json2bson", List(importee"_")))).
+            atomic
+
+        case t @ Term.Name("CONTENT_DISPOSITION_INLINE") if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController#CONTENT_DISPOSITION_INLINE")) =>
+          Patch.replaceTree(t, """"inline"""")
+
+        case n @ Type.Name("JSONCollection") if (n.symbol.info.exists(
+          _.toString startsWith "reactivemongo/play/json/collection/")) =>
+          (Patch.replaceTree(n, "BSONCollection") + Patch.addGlobalImport(
+            Importer( // In case JSONCollection was coming from _ import
+              q"reactivemongo.api.bson.collection",
+              List(importee"BSONCollection")))).atomic
+
+        case t @ Term.Select(Term.Select(Term.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("play")),
+          Term.Name("json")), Term.Name("collection")),
+          Term.Name("JSONCollection")) =>
+          Patch.replaceTree(t, "reactivemongo.api.bson.collection.BSONCollection")
+
+        case n @ Type.Singleton(Term.Name("JSONSerializationPack")) =>
+          (Patch.replaceTree(
+            n, "BSONSerializationPack.type") + Patch.addGlobalImport(
+            Importer( // In case JSONSerializationPack was coming from _ import
+              q"reactivemongo.api.bson.collection",
+              List(importee"BSONSerializationPack")))).atomic
+
+        case t @ Term.Select(Term.Select(Term.Select(
+          Term.Name("reactivemongo"), Term.Name("play")),
+          Term.Name("json")), Term.Name("JSONSerializationPack")) =>
+          Patch.replaceTree(
+            t, "reactivemongo.api.bson.collection.BSONSerializationPack")
+
+        case n @ Type.Name("JsGridFS") =>
+          Patch.replaceTree(n, "GridFS")
+
+        case p @ Term.Apply(
+          Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _),
+          _ :: _ :: mat :: Nil) => {
+          if (gfs.symbol.info.map(
+            _.signature.toString).exists(_ startsWith "Future[")) {
+            Patch.replaceTree(p, s"""gridFSBodyParser($gfs)($mat)""")
+          } else {
+            Patch.replaceTree(
+              p, s"gridFSBodyParser(Future.successful($gfs))($mat)")
+          }
         }
 
-        Patch.fromIterable(patches.result())
-      }
-
-      case Importer(
-        Term.Select(
-          Term.Select(Term.Name("reactivemongo"), Term.Name("play")),
-          Term.Name("json")
-          ), importees) => {
-        val patches = Seq.newBuilder[Patch]
-
-        importees.foreach {
-          case i @ Importee.Name(Name.Indeterminate("JSONSerializationPack")) =>
-            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(
-                q"reactivemongo.api.bson.collection",
-                List(importee"BSONSerializationPack")))).atomic
-
-          case i @ Importee.Name(Name.Indeterminate("BSONFormats")) =>
-            patches += (Patch.removeImportee(i) + Patch.addGlobalImport(
-              Importer(
-                q"reactivemongo.play.json.compat",
-                List(importee"_")))).atomic
-
-          case _ =>
-        }
-
-        Patch.fromIterable(patches.result())
-      }
-    },
-    refactor = {
-      case t @ Term.ApplyType(Term.Name("serve"), List(_, _)) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
-        Patch.replaceTree(t, "serve[reactivemongo.api.bson.BSONValue]")
-
-      case t @ Init(Type.Name("MongoController"), _, _) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
-        (Patch.addGlobalImport(Importer(
-          q"reactivemongo.play.json.compat", List(importee"_"))) + Patch.
-          addGlobalImport(Importer(
-            q"reactivemongo.play.json.compat.json2bson", List(importee"_")))).
-          atomic
-
-      case t @ Term.Name("CONTENT_DISPOSITION_INLINE") if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController#CONTENT_DISPOSITION_INLINE")) =>
-        Patch.replaceTree(t, """"inline"""")
-
-      case n @ Type.Name("JSONCollection") if (n.symbol.info.exists(
-        _.toString startsWith "reactivemongo/play/json/collection/")) =>
-        (Patch.replaceTree(n, "BSONCollection") + Patch.addGlobalImport(
-          Importer( // In case JSONCollection was coming from _ import
-            q"reactivemongo.api.bson.collection",
-            List(importee"BSONCollection")))).atomic
-
-      case t @ Term.Select(Term.Select(Term.Select(Term.Select(
-        Term.Name("reactivemongo"), Term.Name("play")),
-        Term.Name("json")), Term.Name("collection")),
-        Term.Name("JSONCollection")) =>
-        Patch.replaceTree(t, "reactivemongo.api.bson.collection.BSONCollection")
-
-      case n @ Type.Singleton(Term.Name("JSONSerializationPack")) =>
-        (Patch.replaceTree(
-          n, "BSONSerializationPack.type") + Patch.addGlobalImport(
-          Importer( // In case JSONSerializationPack was coming from _ import
-            q"reactivemongo.api.bson.collection",
-            List(importee"BSONSerializationPack")))).atomic
-
-      case t @ Term.Select(Term.Select(Term.Select(
-        Term.Name("reactivemongo"), Term.Name("play")),
-        Term.Name("json")), Term.Name("JSONSerializationPack")) =>
-        Patch.replaceTree(
-          t, "reactivemongo.api.bson.collection.BSONSerializationPack")
-
-      case n @ Type.Name("JsGridFS") =>
-        Patch.replaceTree(n, "GridFS")
-
-      case p @ Term.Apply(
-        Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _),
-        _ :: _ :: mat :: Nil) => {
-        if (gfs.symbol.info.map(
-          _.signature.toString).exists(_ startsWith "Future[")) {
-          Patch.replaceTree(p, s"""gridFSBodyParser($gfs)($mat)""")
-        } else {
+        case p @ Term.Apply(
+          Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _ :: _),
+          _ :: _ :: mat :: _ :: Nil) =>
           Patch.replaceTree(
             p, s"gridFSBodyParser(Future.successful($gfs))($mat)")
+
+        // ---
+
+        case t @ Term.Select(Term.Name("BSONFormats"), Term.Name(n)) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/play/json")) => {
+          if (n == "toJSON") {
+            Patch.replaceTree(t, "ValueConverters.fromValue")
+          } else if (n == "toBSON") {
+            Patch.replaceTree(t, "ValueConverters.toValue")
+          } else {
+            Patch.empty
+          }
         }
-      }
 
-      case p @ Term.Apply(
-        Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _ :: _),
-        _ :: _ :: mat :: _ :: Nil) =>
-        Patch.replaceTree(
-          p, s"gridFSBodyParser(Future.successful($gfs))($mat)")
-
-      // ---
-
-      case t @ Term.Select(Term.Name("BSONFormats"), Term.Name(n)) if (
-        t.symbol.info.exists(
-          _.toString startsWith "reactivemongo/play/json")) => {
-        if (n == "toJSON") {
-          Patch.replaceTree(t, "ValueConverters.fromValue")
-        } else if (n == "toBSON") {
-          Patch.replaceTree(t, "ValueConverters.toValue")
-        } else {
-          Patch.empty
+        case t @ Term.Select(Term.Select(Term.Select(Term.Select(Term.Name(
+          "reactivemongo"), Term.Name("play")),
+          Term.Name("json")), Term.Name("BSONFormats")), Term.Name(n)) => {
+          if (n == "toJSON") {
+            Patch.replaceTree(t, "reactivemongo.play.json.compat.fromValue")
+          } else if (n == "toBSON") {
+            Patch.replaceTree(t, "reactivemongo.play.json.compat.toValue")
+          } else {
+            Patch.empty
+          }
         }
-      }
-
-      case t @ Term.Select(Term.Select(Term.Select(Term.Select(Term.Name(
-        "reactivemongo"), Term.Name("play")),
-        Term.Name("json")), Term.Name("BSONFormats")), Term.Name(n)) => {
-        if (n == "toJSON") {
-          Patch.replaceTree(t, "reactivemongo.play.json.compat.fromValue")
-        } else if (n == "toBSON") {
-          Patch.replaceTree(t, "reactivemongo.play.json.compat.toValue")
-        } else {
-          Patch.empty
-        }
-      }
-    })
+      })
+  }
 
   private class AfterWriteExtractor(implicit doc: SemanticDocument) {
     def unapply(tree: Tree): Option[Term] = {
