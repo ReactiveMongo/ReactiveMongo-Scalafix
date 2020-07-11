@@ -26,13 +26,16 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
     ()
   }
 
+  type FS1 = JsGridFS
+  type FS2 = MongoController.JsGridFS
+
   @silent
   def foo(gfs: JsGridFS) = gridFSBodyParser(gfs)(null, null, null)
 
   @silent
   def bar(gfs: JsGridFS) = gridFSBodyParser(gfs, null)(null, null, null, null)
 
-  def lorem(gfs: Future[JsGridFS]) =
+  def lorem(gfs: Future[MongoController.JsGridFS]) =
     gridFSBodyParser(gfs, null)(null, null, null)
 
   def json1(coll: JSONCollection) = coll.name

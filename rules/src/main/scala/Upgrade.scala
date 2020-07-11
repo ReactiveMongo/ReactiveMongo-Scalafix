@@ -3,11 +3,32 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-// TODO: JsGridFS => GridFS
+/* TODO:
+aggregatorContext(first, pipeline ~> aggregatorContext(first +: pipeline
+ */
 
 /* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[
 files.update
-*/
+ */
+
+/* TODO:
+type arguments [play.api.libs.json.JsObject,play.api.libs.json.JsString] do not conform to method find's type parameter bounds [S,T <: fs.ReadFile[_]]
+[error]       files <- fs.find[JsObject, JsString](Json.obj("article" -> id)).
+ */
+
+/* TODO:
+value readFileReads is not a member of object play.modules.reactivemongo.MongoController
+[error]   import MongoController.readFileReads
+ */
+
+/* TODO:
+type JSONReadFile = ReadFile[JSONSerializationPack.type, JsString]
+ */
+
+/* TODO:
+  def collection = reactiveMongoApi.database.
+    map(_.collection[JSONCollection]("articles"))
+ */
 
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
@@ -37,13 +58,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
     }
 
     { tree: Tree =>
-      def recurse = Patch.fromIterable(tree.children.map(transformer))
+      def recurse() = Patch.fromIterable(tree.children.map(transformer))
 
       pipeline.lift(tree).map { p =>
         if (p.patch.nonEmpty) {
           p.patch
         } else if (p.recurse && tree.children.nonEmpty) {
-          recurse
+          recurse()
         } else {
           Patch.empty
         }
@@ -550,22 +571,24 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Term.Apply(
-          Term.ApplyType(
-            x @ Term.Select(Term.Name(c), Term.Name("aggregateWith1")),
-            typeArgs
-            ),
-          args
-          ) if (x.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection")) => {
-          val refactored = Term.Apply(Term.ApplyType(
-            Term.Select(Term.Name(c), Term.Name("aggregateWith")),
-            typeArgs), args)
+        case t @ Term.Select(Term.Name(_), n @ Term.Name("aggregateWith1")) if (
+          t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection")) =>
+          Patch.replaceTree(n, "aggregateWith")
 
-          Patch.replaceTree(t, refactored.syntax)
+        case t @ Term.Select(op @ Term.Name(_), Term.Name("makePipe")) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/AggregationFramework")) => Patch.replaceTree(t, op.syntax)
+
+        case t @ Term.Apply(a @ Term.Apply(Term.ApplyType(Term.Select(
+          _, _), _), _), List(Term.Block(
+          List(Term.Function(_, pipeline))))) if (
+          t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection#aggregateWith")) => {
+          val pn = Term.fresh("pipeline")
+
+          transformer(doc)(a) + Patch.addLeft(pipeline, s"{ val ${pn} = { ") +
+            transformer(doc)(pipeline) + Patch.addRight(
+              pipeline, s" }; ${pn}._1 +: ${pn}._2 }")
         }
 
-        case t @ Term.Select(op @ Term.Name(_), Term.Name("makePipe")) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/AggregationFramework")) =>
-          Patch.replaceTree(t, op.syntax)
+        // ---
 
         case t @ Term.Select(
           Term.Select(c, Term.Name("BatchCommands")),

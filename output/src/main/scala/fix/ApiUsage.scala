@@ -110,12 +110,12 @@ object Coll {
   @silent
   def agg1(coll: BSONCollection)(implicit ec: ExecutionContext) =
     coll.aggregateWith[BSONDocument](explain = true, true) { f =>
-      import f._
+      { val pipeline3 = { import f._
 
       val m = Match(BSONDocument("foo" -> 1))
       val _ = m
 
-      m -> List(Out("bar"))
+      m -> List(Out("bar")) }; pipeline3._1 +: pipeline3._2 }
     }
 
   def agg2(coll: BSONCollection) = coll.AggregationFramework
