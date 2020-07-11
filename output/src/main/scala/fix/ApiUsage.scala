@@ -120,6 +120,13 @@ object Coll {
 
   def agg2(coll: BSONCollection) = coll.AggregationFramework
 
+  def agg3(coll: BSONCollection)(op1: coll.PipelineOperator) =
+    coll.aggregatorContext[BSONDocument](pipeline = List(op1), explain = true)
+
+  def agg4(coll: BSONCollection)(
+    op1: coll.PipelineOperator, op2: coll.PipelineOperator) =
+    coll.aggregatorContext(pipeline = op1 +: List(op2), true, true)
+
   def remove1(coll: BSONCollection)(implicit ec: ExecutionContext) =
     coll.delete.one(q = BSONDocument("foo" -> 1))
 

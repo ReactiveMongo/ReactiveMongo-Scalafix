@@ -3,10 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-/* TODO:
-aggregatorContext(first, pipeline ~> aggregatorContext(first +: pipeline
- */
-
 /* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[
 files.update
  */
@@ -586,6 +582,50 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           transformer(doc)(a) + Patch.addLeft(pipeline, s"{ val ${pn} = { ") +
             transformer(doc)(pipeline) + Patch.addRight(
               pipeline, s" }; ${pn}._1 +: ${pn}._2 }")
+        }
+
+        case t @ Term.Apply(s, args) if (
+          t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection#aggregatorContext")) => {
+          var first = Option.empty[Term]
+          var other = Option.empty[Term]
+
+          val as = args.filter { a =>
+            a.symbol.info.forall { i =>
+              val s = i.toString
+
+              if (s.indexOf("PipelineOperator") != -1) {
+                first = Some(a)
+                false
+              } else if (s.indexOf("List") != -1) {
+                other = Some(a)
+                false
+              } else {
+                true
+              }
+            }
+          }
+
+          first match {
+            case Some(firstOp) => {
+              val pipeline = other match {
+                case Some(ops) =>
+                  s"${firstOp.syntax} +: ${ops.syntax}"
+
+                case _ =>
+                  s"List(${firstOp.syntax})"
+              }
+
+              val after = if (as.isEmpty) "" else {
+                ", " + as.map(_.syntax).mkString(", ")
+              }
+
+              Patch.replaceTree(
+                t, s"${s.syntax}(pipeline = ${pipeline}${after})")
+            }
+
+            case _ =>
+              Patch.empty
+          }
         }
 
         // ---
