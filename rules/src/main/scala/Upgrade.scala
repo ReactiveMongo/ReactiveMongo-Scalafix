@@ -13,15 +13,6 @@ type arguments [play.api.libs.json.JsObject,play.api.libs.json.JsString] do not 
  */
 
 /* TODO:
-value readFileReads is not a member of object play.modules.reactivemongo.MongoController
-[error]   import MongoController.readFileReads
- */
-
-/* TODO:
-type JSONReadFile = ReadFile[JSONSerializationPack.type, JsString]
- */
-
-/* TODO:
   def collection = reactiveMongoApi.database.
     map(_.collection[JSONCollection]("articles"))
  */
@@ -1381,13 +1372,21 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       // ---
 
       object ReadFileTypeLike {
-        def unapply(t: Type): Boolean = t match {
+        def unapply(t: Type): Option[String] = t match {
           case Type.Name("BasicMetadata" |
-            "ComputedMetadata" | "CustomMetadata" | "ReadFile") =>
-            t.symbol.owner.toString == "reactivemongo/api/gridfs/"
+            "ComputedMetadata" | "CustomMetadata" | "ReadFile") if (
+            t.symbol.owner.toString == "reactivemongo/api/gridfs/") =>
+            Some("ReadFile")
+
+          case Type.Select(Term.Select(Term.Select(Term.Name(
+            "reactivemongo"), Term.Name("api")),
+            Term.Name("gridfs")), tn @ Type.Name(_)) =>
+            unapply(tn).map { n =>
+              s"reactivemongo.api.gridfs.${n}"
+            }
 
           case _ =>
-            false
+            None
         }
       }
 
@@ -1430,10 +1429,20 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case readFileTpe @ Type.Apply(ReadFileTypeLike(), List(_, idTpe)) =>
+        case readFileTpe @ Type.Apply(ReadFileTypeLike(rf), List(_, idTpe)) => {
+          val it: String = {
+            if (idTpe.symbol.info.exists(
+              _.toString startsWith "play/api/libs/json/JsString")) {
+              "reactivemongo.api.bson.BSONString"
+            } else {
+              idTpe.syntax
+            }
+          }
+
           Patch.replaceTree(
             readFileTpe,
-            s"ReadFile[${idTpe.syntax}, reactivemongo.api.bson.BSONDocument]")
+            s"${rf}[${it}, reactivemongo.api.bson.BSONDocument]")
+        }
 
         case save @ Term.Apply(
           Term.Apply(

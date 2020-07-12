@@ -5,6 +5,8 @@ import scala.concurrent.{ ExecutionContext, Future }
 import play.api.libs.json._
 
 
+import reactivemongo.api.gridfs.ReadFile
+
 
 
 import play.modules.reactivemongo.{
@@ -59,6 +61,11 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
     import m.executionContext
     serve[reactivemongo.api.bson.BSONValue](fs)(???)
   }
+
+  type JSONReadFile1 = ReadFile[reactivemongo.api.bson.BSONString, reactivemongo.api.bson.BSONDocument]
+
+  type JSONReadFile2 = reactivemongo.api.gridfs.ReadFile[reactivemongo.api.bson.BSONString, reactivemongo.api.bson.BSONDocument]
+
 }
 
 object PlayGridFS {

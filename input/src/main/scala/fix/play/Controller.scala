@@ -9,6 +9,8 @@ import play.api.libs.json._
 
 import reactivemongo.bson.BSONValue
 
+import reactivemongo.api.gridfs.ReadFile
+
 import reactivemongo.play.json.{ JSONSerializationPack, BSONFormats }
 
 import reactivemongo.play.json.collection.JSONCollection
@@ -61,6 +63,11 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
     import m.executionContext
     serve[JsString, MongoController.JsReadFile[JsString]](fs)(???)
   }
+
+  type JSONReadFile1 = ReadFile[JSONSerializationPack.type, JsString]
+
+  type JSONReadFile2 = reactivemongo.api.gridfs.ReadFile[JSONSerializationPack.type, JsString]
+
 }
 
 object PlayGridFS {
