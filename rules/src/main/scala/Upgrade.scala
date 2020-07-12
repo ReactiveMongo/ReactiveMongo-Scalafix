@@ -3,20 +3,6 @@ package reactivemongo.scalafix
 import scalafix.v1._
 import scala.meta._
 
-/* TODO: value files is not a member of reactivemongo.api.gridfs.GridFS[
-files.update
- */
-
-/* TODO:
-type arguments [play.api.libs.json.JsObject,play.api.libs.json.JsString] do not conform to method find's type parameter bounds [S,T <: fs.ReadFile[_]]
-[error]       files <- fs.find[JsObject, JsString](Json.obj("article" -> id)).
- */
-
-/* TODO:
-  def collection = reactiveMongoApi.database.
-    map(_.collection[JSONCollection]("articles"))
- */
-
 final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
   override def fix(implicit doc: SemanticDocument): Patch =
     Patch.fromIterable(doc.tree.children.map(transformer))
@@ -437,7 +423,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/Command.CommandWithPackRunner")) =>
           Patch.replaceTree(t, s"${s.syntax}.apply[${r.syntax}, ${c.syntax}]")
 
-        case t @ Update((tpeParams, c, args)) => {
+        case t @ Update((tpeParams, c, args)) if (!c.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/gridfs/GridFS#files")) => {
           val appTArgs: String = tpeParams match {
             case q :: u :: Nil => s"[$q, $u]"
             case _ => ""
@@ -1411,6 +1398,14 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           t.symbol.info.exists(
             _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) =>
           Patch.replaceTree(t, s"${fs.syntax}.find[reactivemongo.api.bson.BSONDocument, reactivemongo.api.bson.BSONValue](${id.syntax})")
+
+        // ---
+
+        case Term.Select(t @ Term.Select(
+          gfs, Term.Name("files")), Term.Name("update")) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/api/gridfs/GridFS#files")) =>
+          Patch.replaceTree(t, gfs.syntax)
 
         // ---
 

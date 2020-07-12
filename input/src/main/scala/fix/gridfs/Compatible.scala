@@ -30,4 +30,13 @@ object Compatible {
   def find(gridfs: GridFS[BSONSerializationPack.type]) =
     gridfs.find[BSONDocument, ReadFile[BSONSerializationPack.type, BSONValue]](???)(???, ???, ???, ???)
 
+  // ---
+
+  def update(gridfs: GridFS[BSONSerializationPack.type])(
+    implicit
+    ec: ExecutionContext) =
+    gridfs.files.update(
+      BSONDocument("_id" -> "foo"),
+      BSONDocument(f"$$set" -> BSONDocument("meta" -> "data")))
+
 }

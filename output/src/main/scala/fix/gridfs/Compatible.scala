@@ -28,4 +28,13 @@ object Compatible {
   def find(gridfs: GridFS[BSONSerializationPack.type]) =
     gridfs.find[reactivemongo.api.bson.BSONDocument, reactivemongo.api.bson.BSONValue](???)(???, ???, ???)
 
+  // ---
+
+  def update(gridfs: GridFS[BSONSerializationPack.type])(
+    implicit
+    ec: ExecutionContext) =
+    gridfs.update(
+      BSONDocument("_id" -> "foo"),
+      BSONDocument(f"$$set" -> BSONDocument("meta" -> "data")))
+
 }

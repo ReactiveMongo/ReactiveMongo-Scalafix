@@ -44,6 +44,9 @@ trait Controller extends MongoController { self: ReactiveMongoComponents =>
 
   def json2(pack: JSONSerializationPack.type) = pack.toString
 
+  def coll1(implicit ec: ExecutionContext) = reactiveMongoApi.database.
+    map(_.collection[JSONCollection]("foo"))
+
   def toJson(v: BSONValue) =
     reactivemongo.play.json.BSONFormats.toJSON(v)
 
