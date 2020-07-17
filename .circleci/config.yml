@@ -50,7 +50,7 @@ jobs:
 
       - run:
           name: Tests
-          command: sbt +testOnly
+          command: sbt -J-Dreactivemongo.api.migrationRequired.nonFatal=yes +testOnly
 
       - save_cache:
           paths:

@@ -36,6 +36,6 @@ ReactiveMongo BSON libraries can be built from this source repository.
 
 To run the tests, use:
 
-    sbt test
+    sbt -Dreactivemongo.api.migrationRequired.nonFatal=yes test
 
 [![CircleCI](https://circleci.com/gh/ReactiveMongo/ReactiveMongo-Scalafix.svg?style=svg)](https://circleci.com/gh/ReactiveMongo/ReactiveMongo-Scalafix)
