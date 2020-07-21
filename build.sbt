@@ -47,9 +47,9 @@ lazy val output = project.in(file("output")).settings(
   },
   scalacOptions += "-P:silencer:globalFilters=.*Unused\\ import.*",
   libraryDependencies ++= {
-    val latestVer = "1.0.0-rc.1-SNAPSHOT"
+    val latestVer = "1.0.0-rc.1"
     val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
-    val rmPlayVer = s"1.0.0-rc.1-play2${play2Ver}-SNAPSHOT"
+    val rmPlayVer = s"1.0.0-rc.1-play2${play2Ver}"
 
     val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> latestVer,
