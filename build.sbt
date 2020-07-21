@@ -47,7 +47,7 @@ lazy val output = project.in(file("output")).settings(
   },
   scalacOptions += "-P:silencer:globalFilters=.*Unused\\ import.*",
   libraryDependencies ++= {
-    val latestVer = "1.0.0-rc.1"
+    val latestVer = "1.0.0-rc.2"
     val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
     val rmPlayVer = s"1.0.0-rc.1-play2${play2Ver}"
 
