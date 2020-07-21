@@ -49,7 +49,7 @@ lazy val output = project.in(file("output")).settings(
   libraryDependencies ++= {
     val latestVer = "1.0.0-rc.2"
     val play2Ver = if (scalaBinaryVersion.value == "2.11") "7" else "8"
-    val rmPlayVer = s"1.0.0-rc.1-play2${play2Ver}"
+    val rmPlayVer = s"1.0.0-play2${play2Ver}-rc.2"
 
     val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> latestVer,
