@@ -22,8 +22,6 @@ import reactivemongo.api.commands.{
 import reactivemongo.api.collections.GenericCollection
 import reactivemongo.api.collections.bson.BSONCollection
 
-import reactivemongo.api.indexes.Index
-
 import com.github.ghik.silencer.silent
 
 object Commands {
@@ -46,11 +44,6 @@ object Commands {
 
     case _ =>
   }
-
-  def index1: Seq[Index] = Seq(Index(Seq.empty, name = Some("foo")))
-
-  def index2: Index = reactivemongo.api.indexes.Index(
-    Seq.empty, name = Some("foo"), false, false, false, version = Some(1))
 
   def withLastError1(arg: Option[GetLastError]): Unit = println(arg.mkString)
 

@@ -2,11 +2,9 @@ package fix
 
 
 
-
 import reactivemongo.api.bson.collection.BSONCollection
 import reactivemongo.api.bson.{ BSONDocument, BSONObjectID, BSONReader, BSONValue, _ }
 import reactivemongo.api.bson.BSONObjectID.{generate => generateId}
-import reactivemongo.api.bson.Macros.Annotations.{ Ignore, Key }
 import reactivemongo.api.bson.collection.BSONSerializationPack
 
 object Bson {
@@ -144,8 +142,4 @@ object Bson {
 
     BSONHandler.from[NonEmptyList[T]](reader.readTry, writer.writeTry)
   }
-
-  case class Foo(
-    @Key("_name") name: String,
-    @Ignore age: Int)
 }

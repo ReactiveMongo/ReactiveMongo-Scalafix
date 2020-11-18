@@ -45,7 +45,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         //println(s"tree = ${tree.structure}")
 
         if (tree.children.nonEmpty) {
-          recurse
+          recurse()
         } else {
           Patch.empty
         }
