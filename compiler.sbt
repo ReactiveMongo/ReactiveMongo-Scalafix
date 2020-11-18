@@ -1,18 +1,16 @@
-ThisBuild / scalaVersion := "2.12.11"
+ThisBuild / scalaVersion := "2.12.12"
 
 ThisBuild / crossScalaVersions := Seq(
-  "2.11.12", scalaVersion.value)
+  "2.11.12", scalaVersion.value, "2.13.3")
 
 ThisBuild / crossVersion := CrossVersion.binary
 
 ThisBuild / scalacOptions ++= Seq(
   "-encoding", "UTF-8", "-target:jvm-1.8",
   "-unchecked",
-  "-deprecation",
   "-feature",
   "-Xlint",
-  "-g:vars",
-  "-Xfatal-warnings"
+  "-g:vars"
 )
 
 inThisBuild(Seq(// scalafix
@@ -26,6 +24,7 @@ inThisBuild(Seq(// scalafix
 ThisBuild / scalacOptions ++= {
   if (scalaBinaryVersion.value == "2.12") {
     Seq(
+      "-Xmax-classfile-name", "128",
       "-Ywarn-numeric-widen",
       "-Ywarn-dead-code",
       "-Ywarn-value-discard",
@@ -34,8 +33,19 @@ ThisBuild / scalacOptions ++= {
       "-Ywarn-unused-import",
       "-Ywarn-macros:after"
     )
+  } else if (scalaBinaryVersion.value == "2.11") {
+    Seq(
+      "-Xmax-classfile-name", "128",
+      "-Yopt:_", "-Ydead-code", "-Yclosure-elim", "-Yconst-opt")
   } else {
-    Seq("-Yopt:_", "-Ydead-code", "-Yclosure-elim", "-Yconst-opt")
+    Seq(
+      "-explaintypes",
+      "-Wnumeric-widen",
+      "-Wdead-code",
+      "-Wvalue-discard",
+      "-Wextra-implicit",
+      "-Wmacros:after",
+      "-Wunused")
   }
 }
 

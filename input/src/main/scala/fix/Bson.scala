@@ -15,9 +15,6 @@ import reactivemongo.bson.BSONObjectID.{ generate => generateId }
 
 import reactivemongo.bson.DefaultBSONHandlers._
 
-import Macros.Annotations, Annotations.Ignore
-import Macros.Annotations.Key
-
 import reactivemongo.api.BSONSerializationPack
 import reactivemongo.api.collections.bson.BSONCollection
 
@@ -156,8 +153,4 @@ object Bson {
 
     BSONHandler[BSONArray, NonEmptyList[T]](reader.read, writer.write)
   }
-
-  case class Foo(
-    @Key("_name") name: String,
-    @Ignore age: Int)
 }

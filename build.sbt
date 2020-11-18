@@ -11,22 +11,52 @@ ThisBuild / resolvers ++= Seq(
 
 addCompilerPlugin(scalafixSemanticdb)
 
+lazy val extraOpts = Def.setting[Seq[String]] {
+  val opts = Seq.newBuilder[String] += "-deprecation"
+
+  if (scalaBinaryVersion.value != "2.13") {
+    opts += "-Xfatal-warnings"
+  } else {
+    opts += "-Werror"
+  }
+
+  opts.result()
+}
+
 lazy val rules = project.in(file("rules")).settings(
   name := "reactivemongo-scalafix",
   moduleName := name.value,
   libraryDependencies ++= Seq(
     "ch.epfl.scala" %% "scalafix-core" % SF.scalafixVersion// cross CrossVersion.full
-  )
+  ),
+  scalacOptions ++= extraOpts.value
 )
 
 lazy val input = project.in(file("input")).settings(
+  unmanagedSourceDirectories in Compile += {
+    val base = (sourceDirectory in Compile).value
+
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, n)) if n < 13 => base / "scala-2.13-"
+      case _                      => base / "scala-2.13+"
+    }
+  },
+  scalacOptions += "-deprecation",
   libraryDependencies ++= {
-    val previousVer = "0.12.7"
+    val previousVer = {
+      if (scalaBinaryVersion.value == "2.13") "0.20.9"
+      else "0.12.7"
+    }
+
+    val (playPrefix, playVer) = {
+      if (scalaBinaryVersion.value == "2.13") "27" -> "2.7.4"
+      else "26" -> "2.6.6"
+    }
 
     val deps = Seq.newBuilder[(String, String)] ++= Seq(
       "reactivemongo" -> previousVer,
       "reactivemongo-akkastream" -> previousVer,
-      "play2-reactivemongo" -> s"${previousVer}-play26")
+      "play2-reactivemongo" -> s"${previousVer}-play${playPrefix}")
 
     if (scalaBinaryVersion.value != "2.13") {
       deps += "reactivemongo-iteratees" -> previousVer
@@ -35,7 +65,7 @@ lazy val input = project.in(file("input")).settings(
     (deps.result().map {
       case (nme, ver) => organization.value %% nme % ver % Provided
     }) ++: Seq(
-      "com.typesafe.play" %% "play" % "2.6.6" % Provided)
+      "com.typesafe.play" %% "play" % playVer % Provided)
   },
   skip in publish := true
 )
@@ -45,6 +75,15 @@ lazy val output = project.in(file("output")).settings(
   sources in Compile ~= {
     _.filterNot(_.getName endsWith "RequireMigration.scala")
   },
+  unmanagedSourceDirectories in Compile += {
+    val base = (sourceDirectory in Compile).value
+
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, n)) if n < 13 => base / "scala-2.13-"
+      case _                      => base / "scala-2.13+"
+    }
+  },
+  scalacOptions ++= extraOpts.value,
   scalacOptions += "-P:silencer:globalFilters=.*Unused\\ import.*",
   libraryDependencies ++= {
     val latestVer = "1.0.0-rc.2"

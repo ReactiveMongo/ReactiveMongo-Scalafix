@@ -8,6 +8,6 @@ addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
 
 addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.13")
 
-addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.9.15-2")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.9.23")
 
 addSbtPlugin("com.dwijnand" % "sbt-dynver" % "4.1.1")
