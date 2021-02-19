@@ -21,6 +21,9 @@ final class Linter extends SemanticRule("ReactiveMongoLinter") {
             future.value == "scala/concurrent/Future#" && (
               db.value == "reactivemongo/api/DB#" ||
               db.value == "reactivemongo/api/DefaultDB#")
+
+          case _ =>
+            false
         }
 
         if (!m) {

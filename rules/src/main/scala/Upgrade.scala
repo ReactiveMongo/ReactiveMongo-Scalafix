@@ -501,6 +501,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
               Patch.replaceTree(t, s"${c.syntax}.insert(writeConcern = $writeConcern).one${appTArg}($docArg)")
             }
+
+            case _ =>
+              Patch.empty
           }
         }
 
