@@ -10,21 +10,21 @@ import reactivemongo.api.bson.collection.BSONSerializationPack
 object Bson {
   def defaultHandlers = reactivemongo.api.bson.migrationRequired("DefaultBSONHandlers is no longer public; Rather use implicit resolution.") /* DefaultBSONHandlers.BSONBinaryHandler */
 
-  def afterWrite1[T](implicit w: BSONWriter[T]): BSONWriter[T] = w.afterWrite { case bson =>
+  def afterWrite1[T](implicit w1: BSONWriter[T]): BSONWriter[T] = w1.afterWrite { case bson =>
     (BSONDocument(f"$$string" -> bson) ++ ("_hash" -> bson.hashCode))
   }
 
-  def afterWrite2[T](implicit w: BSONWriter[T]) =
-    w.afterWrite { case bson =>
+  def afterWrite2[T](implicit w2: BSONWriter[T]) =
+    w2.afterWrite { case bson =>
       BSONDocument(f"$$value" -> bson)
     }
 
-  def afterWrite3[T](implicit w: BSONDocumentWriter[T]) =
-    w.afterWrite { doc =>
+  def afterWrite3[T](implicit w3: BSONDocumentWriter[T]) =
+    w3.afterWrite { doc =>
       (doc ++ ("_hash" -> doc.hashCode))
     }
 
-  def afterWrite4[T](implicit w: BSONWriter[T]): BSONWriter[T] = w.afterWrite {
+  def afterWrite4[T](implicit w4: BSONWriter[T]): BSONWriter[T] = w4.afterWrite {
     case str @ BSONString(v) =>
       (BSONDocument(f"$$string" -> str) ++ ("_len" -> v.size))
 
@@ -42,18 +42,18 @@ object Bson {
 
   def oid(): BSONObjectID = generateId()
 
-  def bar(doc: reactivemongo.api.bson.BSONDocument): Option[Int] =
-    (BSONDocument(("foo" -> 0)) ++ doc).getAsOpt[BSONNumberLike]("_i").flatMap { _.toInt.toOption }
+  def bar(barDoc: reactivemongo.api.bson.BSONDocument): Option[Int] =
+    ((BSONDocument("foo" -> 0) ++ barDoc)).getAsOpt[BSONNumberLike]("_i").flatMap(_.toInt.toOption)
 
-  def lorem(doc: BSONDocument) =
-    (doc ++ ("foo" -> 1)).getAsOpt[String]("...")
+  def lorem(loremDoc: BSONDocument) =
+    ((loremDoc ++ ("foo" -> 1))).getAsOpt[String]("...")
 
   def ipsum(doc: BSONDocument) = doc.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]("...")
 
   def dolor(arr: BSONArray) = arr.getAsOpt[Int](0)
 
   def bolo(arr: reactivemongo.api.bson.BSONArray) =
-    arr.getAsOpt[BSONBooleanLike](0).flatMap { v => (v.toBoolean).toOption }
+    arr.getAsOpt[BSONBooleanLike](0).flatMap { v => v.toBoolean.toOption }
 
   def collName1(coll: BSONCollection): String = coll.name
 
