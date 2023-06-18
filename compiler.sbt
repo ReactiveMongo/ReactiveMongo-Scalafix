@@ -1,7 +1,6 @@
-ThisBuild / scalaVersion := "2.12.16"
+ThisBuild / scalaVersion := "2.12.18"
 
-ThisBuild / crossScalaVersions := Seq(
-  "2.11.12", scalaVersion.value, "2.13.8")
+ThisBuild / crossScalaVersions := Seq(scalaVersion.value, "2.13.11")
 
 ThisBuild / crossVersion := CrossVersion.binary
 
@@ -33,10 +32,6 @@ ThisBuild / scalacOptions ++= {
       "-Ywarn-unused-import",
       "-Ywarn-macros:after"
     )
-  } else if (scalaBinaryVersion.value == "2.11") {
-    Seq(
-      "-Xmax-classfile-name", "128",
-      "-Yopt:_", "-Ydead-code", "-Yclosure-elim", "-Yconst-opt")
   } else {
     Seq(
       "-explaintypes",
@@ -67,7 +62,7 @@ Test / console / scalacOptions ~= {
 }
 
 ThisBuild / libraryDependencies ++= {
-  val silencerVersion = "1.7.9"
+  val silencerVersion = "1.17.13"
 
   Seq(
     compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).

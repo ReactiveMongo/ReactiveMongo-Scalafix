@@ -55,19 +55,19 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
   private def streamingUpgrade(implicit doc: SemanticDocument) = Fix(
     refactor = {
-      case t @ Term.Apply(
+      case t @ Term.Apply.After_4_6_0(
         Term.Select(c @ Term.Name(_), Term.Name("responseSource")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "AkkaStreamCursor")) =>
         migrationRequired(t, "Use bulkSource")
 
-      case t @ Term.Apply(
+      case t @ Term.Apply.After_4_6_0(
         Term.Select(c @ Term.Name(_), Term.Name("responsePublisher")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "AkkaStreamCursor")) =>
         migrationRequired(t, "Use bulkPublisher")
 
-      case t @ Term.Apply(
+      case t @ Term.Apply.After_4_6_0(
         Term.Select(c @ Term.Name(_), Term.Name("responseEnumerator")), _) if (
         c.symbol.info.exists(
           _.signature.toString startsWith "PlayIterateesCursor")) =>
@@ -162,8 +162,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
   private final class InsertExtractor(implicit doc: SemanticDocument) {
     def unapply(tree: Tree): Option[Tuple3[Option[Type], Term, List[Term]]] = tree match {
-      case t @ Term.Apply(
-        Term.Select(c, Term.Name("insert")), args) if (
+      case t @ Term.Apply.After_4_6_0(
+        Term.Select(c, Term.Name("insert")), Term.ArgClause(args, _)) if (
         t.symbol.info.exists { i =>
           i.signature match {
             case MethodSignature(_, List(a, b) :: _, _) if {
@@ -179,8 +179,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         }) =>
         Some((Option.empty[Type], c, args))
 
-      case t @ Term.Apply(Term.ApplyType(
-        Term.Select(c, Term.Name("insert")), List(tpe)), args) if (
+      case t @ Term.Apply.After_4_6_0(Term.ApplyType.After_4_6_0(
+        Term.Select(c, Term.Name("insert")), Type.ArgClause(List(tpe))),
+        Term.ArgClause(args, _)) if (
         t.symbol.info.exists { i =>
           i.signature match {
             case MethodSignature(_, List(a, b) :: _, _) if {
@@ -203,14 +204,16 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
   private final class UpdateExtractor(implicit doc: SemanticDocument) {
     def unapply(tree: Tree): Option[Tuple3[List[Type], Term, List[Term]]] = tree match {
-      case t @ Term.Apply(Term.ApplyType(
-        Term.Select(c, Term.Name("update")), tpeParams), args) if (
+      case t @ Term.Apply.After_4_6_0(Term.ApplyType.After_4_6_0(
+        Term.Select(c, Term.Name("update")), Type.ArgClause(tpeParams)),
+        Term.ArgClause(args, _)) if (
         t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/collections/")) =>
         Some(Tuple3(tpeParams, c, args))
 
-      case t @ Term.Apply(
-        Term.Select(c, Term.Name("update")), args) if (
+      case t @ Term.Apply.After_4_6_0(
+        Term.Select(c, Term.Name("update")),
+        Term.ArgClause(args, _)) if (
         t.symbol.info.exists { i =>
           i.signature match {
             case MethodSignature(_, funArgs :: _, _) =>
@@ -307,13 +310,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       val Update = new UpdateExtractor
 
       {
-        case t @ Term.Apply(n @ (Term.Name("Index") | Term.Select(
+        case t @ Term.Apply.After_4_6_0(n @ (Term.Name("Index") | Term.Select(
           Term.Select(
             Term.Select(Term.Name("reactivemongo"), Term.Name("api")),
             Term.Name("indexes")
             ),
           Term.Name("Index")
-          )), args) if (t.symbol.info.exists(
+          )), Term.ArgClause(args, _)) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/indexes/Index")) => {
 
           val orderedArgs = Seq(
@@ -389,23 +392,25 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Type.Name("QueryOpts"))) =>
           Patch.replaceTree(t, s"Nothing /* No longer exists: ${t.syntax} */")
 
-        case t @ Term.Apply(_, _) if (t.symbol.info.exists(
+        case t @ Term.Apply.After_4_6_0(_, _) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/QueryOpts")) =>
           migrationRequired(t, "Directly use query builder") -> false
 
         // ---
 
-        case t @ Term.Apply(
-          Term.Select(c, Term.Name("runValueCommand")), args) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollectionWithCommands")) =>
+        case t @ Term.Apply.After_4_6_0(
+          Term.Select(c, Term.Name("runValueCommand")),
+          Term.ArgClause(args, _)) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollectionWithCommands")) =>
           Patch.replaceTree(t, s"""${c.syntax}.runCommand(${args.map(_.syntax) mkString ", "})""")
 
-        case t @ Type.Apply(Type.Select(Term.Select(Term.Select(
+        case t @ Type.Apply.After_4_6_0(Type.Select(Term.Select(Term.Select(
           Term.Name("reactivemongo"), Term.Name("api")),
           Term.Name("commands")), Type.Name("BoxedAnyVal")),
-          List(tpe)) =>
+          Type.ArgClause(List(tpe))) =>
           Patch.replaceTree(t, tpe.syntax)
 
-        case t @ Type.Apply(Type.Name("BoxedAnyVal"), List(tpe)) if (
+        case t @ Type.Apply.After_4_6_0(Type.Name("BoxedAnyVal"),
+          Type.ArgClause(List(tpe))) if (
           t.symbol.info.exists(
             _.toString startsWith "reactivemongo/api/commands/BoxedAnyVal")) =>
           Patch.replaceTree(t, tpe.syntax)
@@ -418,8 +423,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           Term.Name("commands")), Term.Name("UnitBox"))) =>
           Patch.replaceTree(t, "Unit")
 
-        case t @ Term.ApplyType(Term.Select(
-          s, Term.Name("unboxed")), List(_, r, c)) if (
+        case t @ Term.ApplyType.After_4_6_0(
+          Term.Select(s, Term.Name("unboxed")),
+          Type.ArgClause(List(_, r, c))) if (
           t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/Command.CommandWithPackRunner")) =>
           Patch.replaceTree(t, s"${s.syntax}.apply[${r.syntax}, ${c.syntax}]")
 
@@ -509,9 +515,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Term.Apply(Term.Select(
-          c, Term.Name("remove")), args) if (t.symbol.info.exists(
-          _.toString startsWith "reactivemongo/api/collections/GenericCollection")) => {
+        case t @ Term.Apply.After_4_6_0(Term.Select(
+          c, Term.Name("remove")), Term.ArgClause(args, _)) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/api/collections/GenericCollection")) => {
           val orderedArgs = Seq("selector", "writeConcern", "firstMatchOnly")
 
           val argMap = scala.collection.mutable.Map.empty[String, Term]
@@ -554,9 +561,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         case t @ Term.Select(op @ Term.Name(_), Term.Name("makePipe")) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/commands/AggregationFramework")) => Patch.replaceTree(t, op.syntax)
 
-        case t @ Term.Apply(a @ Term.Apply(Term.ApplyType(Term.Select(
-          _, _), _), _), List(Term.Block(
-          List(Term.Function(_, pipeline))))) if (
+        case t @ Term.Apply.After_4_6_0(a @ Term.Apply.After_4_6_0(
+          Term.ApplyType.After_4_6_0(Term.Select(
+            _, _), _), _), Term.ArgClause(List(Term.Block(
+          List(Term.Function.After_4_6_0(_, pipeline)))), _)) if (
           t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection#aggregateWith")) => {
           val pn = Term.fresh("pipeline")
 
@@ -565,7 +573,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
               pipeline, s" }; ${pn}._1 +: ${pn}._2 }")
         }
 
-        case t @ Term.Apply(s, args) if (
+        case t @ Term.Apply.After_4_6_0(s, Term.ArgClause(args, _)) if (
           t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericCollection#aggregatorContext")) => {
           var first = Option.empty[Term]
           var other = Option.empty[Term]
@@ -625,9 +633,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         case t @ Term.Name(QueryBuilderNaming(newName)) if (t.symbol.info.exists(_.toString startsWith "reactivemongo/api/collections/GenericQueryBuilder")) =>
           Patch.replaceTree(t, newName)
 
-        case t @ Term.Apply(
+        case t @ Term.Apply.After_4_6_0(
           Term.Select(c, Term.Name("find")),
-          List(a, b)) if (t.symbol.info.exists { i =>
+          Term.ArgClause(List(a, b), _)) if (t.symbol.info.exists { i =>
           val sym = i.toString
 
           sym.startsWith("reactivemongo/api/collections/GenericCollection") &&
@@ -651,8 +659,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Term.Apply(
-          Term.Select(c, Term.Name("rename")), args) if (
+        case t @ Term.Apply.After_4_6_0(
+          Term.Select(c, Term.Name("rename")), Term.ArgClause(args, _)) if (
           t.symbol.info.exists {
             _.toString startsWith "reactivemongo/api/CollectionMetaCommands"
           }) => {
@@ -716,15 +724,15 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
       @annotation.tailrec
       private def find(t: Tree, ctrl: Boolean): Option[Tree] = t match {
-        case x @ Term.Apply(fn, _) if (x.symbol.info.exists(
+        case x @ Term.Apply.After_4_6_0(fn, _) if (x.symbol.info.exists(
           _.toString startsWith (
             "play/modules/reactivemongo/MongoController"))) =>
           find(fn, true)
 
-        case t @ Term.ApplyType(Term.Name("serve"), _) if ctrl =>
+        case t @ Term.ApplyType.After_4_6_0(Term.Name("serve"), _) if ctrl =>
           Some(t)
 
-        case a @ Term.ApplyType(Term.Name("serve"), _) =>
+        case a @ Term.ApplyType.After_4_6_0(Term.Name("serve"), _) =>
           a.symbol.info.map(_.signature).flatMap {
             case ClassSignature(_, parents, _, _) => parents.collectFirst {
               case TypeRef(_, sym, _) if (sym.toString.startsWith(
@@ -817,7 +825,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Init(Type.Name("MongoController"), _, _) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
+        case t @ Init.After_4_6_0(Type.Name("MongoController"), _, _) if (t.symbol.info.exists(_.toString startsWith "play/modules/reactivemongo/MongoController")) =>
           (Patch.addGlobalImport(Importer(
             q"reactivemongo.play.json.compat", List(importee"_"))) + Patch.
             addGlobalImport(Importer(
@@ -856,9 +864,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         case n @ Type.Name("JsGridFS") =>
           Patch.replaceTree(n, "GridFS")
 
-        case p @ Term.Apply(
-          Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _),
-          _ :: _ :: mat :: Nil) => {
+        case p @ Term.Apply.After_4_6_0(
+          Term.Apply.After_4_6_0(Term.Name("gridFSBodyParser"),
+            Term.ArgClause(gfs :: _, _)),
+          Term.ArgClause(_ :: _ :: mat :: Nil, _)) => {
           if (gfs.symbol.info.map(
             _.signature.toString).exists(_ startsWith "Future[")) {
             Patch.replaceTree(p, s"""gridFSBodyParser($gfs)($mat)""")
@@ -868,9 +877,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case p @ Term.Apply(
-          Term.Apply(Term.Name("gridFSBodyParser"), gfs :: _ :: _),
-          _ :: _ :: mat :: _ :: Nil) =>
+        case p @ Term.Apply.After_4_6_0(
+          Term.Apply.After_4_6_0(Term.Name("gridFSBodyParser"),
+            Term.ArgClause(gfs :: _ :: _, _)),
+          Term.ArgClause(_ :: _ :: mat :: _ :: Nil, _)) =>
           Patch.replaceTree(
             p, s"gridFSBodyParser(Future.successful($gfs))($mat)")
 
@@ -910,7 +920,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
         case Term.Select(w, Term.Name("afterWrite")) =>
           Some(w)
 
-        case Term.ApplyType(Term.Select(w, Term.Name("afterWrite")), List(_)) =>
+        case Term.ApplyType.After_4_6_0(
+          Term.Select(w, Term.Name("afterWrite")), Type.ArgClause(List(_))) =>
           Some(w)
 
         case _ =>
@@ -1014,8 +1025,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case Term.Apply(aw @ AfterWrite(w),
-          List(body @ Term.PartialFunction(_))) if (
+        case Term.Apply.After_4_6_0(aw @ AfterWrite(w),
+          Term.ArgClause(List(body @ Term.PartialFunction(_)), _)) if (
           w.symbol.info.exists(
             _.toString.indexOf("BSONDocumentWriter") == -1)) => {
           val basePatch = Patch.replaceTree(aw, s"${w.syntax}.afterWrite")
@@ -1028,11 +1039,13 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case Term.Apply(aw @ AfterWrite(w), List(Term.Block(
-          List(Term.Function(List(p @ Term.Param(_, _, _, _)), body))))) if (
+        case Term.Apply.After_4_6_0(aw @ AfterWrite(w),
+          Term.ArgClause(List(Term.Block(
+            List(Term.Function.After_4_6_0(
+              Term.ParamClause(List(p @ Term.Param(_, _, _, _)), _),
+              body)))), _)) if (
           w.symbol.info.exists(
             _.toString.indexOf("BSONDocumentWriter") == -1)) => {
-
           val basePatch = (Patch.replaceTree(
             aw, s"${w.syntax}.afterWrite") + Patch.replaceTree(
             p, s"case ${p.syntax}"))
@@ -1064,9 +1077,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case Term.Apply(n @ (Term.Name("BSONHandler") | Term.Select(
+        case Term.Apply.After_4_6_0(n @ (Term.Name("BSONHandler") | Term.Select(
           Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
-          Term.Name("BSONHandler"))), List(r, w)) => {
+          Term.Name("BSONHandler"))), Term.ArgClause(List(r, w), _)) => {
 
           val safe = r.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONReader#read")
@@ -1085,10 +1098,12 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case Term.Apply(
-          t @ Term.ApplyType(n @ (Term.Name("BSONHandler") | Term.Select(
-            Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
-            Term.Name("BSONHandler"))), List(_, tpe)), List(r, w)) => {
+        case Term.Apply.After_4_6_0(
+          t @ Term.ApplyType.After_4_6_0(
+            n @ (Term.Name("BSONHandler") | Term.Select(
+              Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
+              Term.Name("BSONHandler"))), Type.ArgClause(List(_, tpe))),
+          Term.ArgClause(List(r, w), _)) => {
 
           val safe = r.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONReader#read")
@@ -1107,12 +1122,12 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case Term.Apply(
-          t @ Term.ApplyType(n @ (Term.Name(
+        case Term.Apply.After_4_6_0(
+          t @ Term.ApplyType.After_4_6_0(n @ (Term.Name(
             "BSONDocumentHandler") | Term.Select(
             Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
             Term.Name("BSONDocumentHandler"))),
-            List(tpe)), List(r, w)) => {
+            Type.ArgClause(List(tpe))), Term.ArgClause(List(r, w), _)) => {
 
           val safe = r.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONReader#read")
@@ -1131,10 +1146,11 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case Term.Apply(n @ (Term.Name(
+        case Term.Apply.After_4_6_0(n @ (Term.Name(
           "BSONDocumentHandler") | Term.Select(
           Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
-          Term.Name("BSONDocumentHandler"))), List(r, w)) => {
+          Term.Name("BSONDocumentHandler"))),
+          Term.ArgClause(List(r, w), _)) => {
 
           val safe = r.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONReader#read")
@@ -1155,50 +1171,52 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case t @ Term.ApplyType(
-          Term.Name("BSONReader"), List(_, tpe)) =>
+        case t @ Term.ApplyType.After_4_6_0(
+          Term.Name("BSONReader"), Type.ArgClause(List(_, tpe))) =>
           Patch.replaceTree(t, s"BSONReader[${tpe.syntax}]")
 
-        case t @ Term.ApplyType(Term.Select(
+        case t @ Term.ApplyType.After_4_6_0(Term.Select(
           Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
-          Term.Name("BSONReader")), List(_, tpe)) =>
+          Term.Name("BSONReader")), Type.ArgClause(List(_, tpe))) =>
           Patch.replaceTree(
             t, s"reactivemongo.api.bson.BSONReader[${tpe.syntax}]")
 
         // ---
 
-        case t @ Term.ApplyType(
-          Term.Name("BSONWriter"), List(tpe, _)) =>
+        case t @ Term.ApplyType.After_4_6_0(
+          Term.Name("BSONWriter"), Type.ArgClause(List(tpe, _))) =>
           Patch.replaceTree(t, s"BSONWriter[${tpe.syntax}]")
 
-        case t @ Term.ApplyType(Term.Select(
+        case t @ Term.ApplyType.After_4_6_0(Term.Select(
           Term.Select(Term.Name("reactivemongo"), Term.Name("bson")),
-          Term.Name("BSONWriter")), List(tpe, _)) =>
+          Term.Name("BSONWriter")), Type.ArgClause(List(tpe, _))) =>
           Patch.replaceTree(
             t, s"reactivemongo.api.bson.BSONWriter[${tpe.syntax}]")
 
         // ---
 
-        case t @ Type.Apply(Type.Select(Term.Select(
+        case t @ Type.Apply.After_4_6_0(Type.Select(Term.Select(
           Term.Name("reactivemongo"), Term.Name("bson")),
-          n @ Type.Name("BSONHandler" | "BSONReader")), List(_, tpe)) =>
+          n @ Type.Name("BSONHandler" | "BSONReader")),
+          Type.ArgClause(List(_, tpe))) =>
           Patch.replaceTree(t, s"reactivemongo.api.bson.$n[${tpe.syntax}]")
 
-        case t @ Type.Apply(Type.Name(
-          n @ ("BSONHandler" | "BSONReader")), List(_, tpe)) if (
+        case t @ Type.Apply.After_4_6_0(Type.Name(
+          n @ ("BSONHandler" | "BSONReader")),
+          Type.ArgClause(List(_, tpe))) if (
           t.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSON")) =>
           Patch.replaceTree(t, s"${n}[${tpe.syntax}]")
 
         // ---
 
-        case t @ Type.Apply(Type.Select(Term.Select(
+        case t @ Type.Apply.After_4_6_0(Type.Select(Term.Select(
           Term.Name("reactivemongo"), Term.Name("bson")),
-          Type.Name(n @ "BSONWriter")), List(tpe, _)) =>
+          Type.Name(n @ "BSONWriter")), Type.ArgClause(List(tpe, _))) =>
           Patch.replaceTree(t, s"reactivemongo.api.bson.${n}[${tpe.syntax}]")
 
-        case t @ Type.Apply(n @ Type.Name("BSONWriter"),
-          List(tpe, _)) if (t.symbol.info.exists(
+        case t @ Type.Apply.After_4_6_0(n @ Type.Name("BSONWriter"),
+          Type.ArgClause(List(tpe, _))) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/bson/BSON")) =>
           Patch.replaceTree(t, s"${n}[${tpe.syntax}]")
 
@@ -1228,17 +1246,18 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             ), Term.Name("bson")) =>
           Patch.replaceTree(t, s"reactivemongo.api.bson.collection")
 
-        case v @ Term.Apply(Term.Select(
-          Term.Apply(
-            Term.ApplyType(
-              Term.Select(d, Term.Name("getAs")),
-              List(t @ Type.Name("BSONNumberLike" | "BSONBooleanLike"))
+        case Term.Apply.After_4_6_0(Term.Select(
+          Term.Apply.After_4_6_0(
+            Term.ApplyType.After_4_6_0(
+              Term.Select(d, getAs @ Term.Name("getAs")),
+              Type.ArgClause(
+                List(Type.Name("BSONNumberLike" | "BSONBooleanLike")))
               ),
-            List(f)
+            Term.ArgClause(List(_), _)
             ),
-          Term.Name("map")
+          map @ Term.Name("map")
           ),
-          List(body)
+          Term.ArgClause(List(body), _)
           ) if (d.symbol.info.exists { i =>
           val t = i.toString
           val s = i.signature.toString
@@ -1247,30 +1266,27 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             t.startsWith("reactivemongo/bson/BSONDocument") ||
             t.startsWith("reactivemongo/bson/BSONArray")
         }) => {
-          val b = body match {
-            case Term.Select(_: Term.Placeholder, expr) =>
-              s"_.${expr.syntax}.toOption"
+          val bd = body match {
+            case Term.AnonymousFunction(
+              Term.Select(_: Term.Placeholder, expr)) =>
+              Patch.addRight(expr, ".toOption")
 
-            case Term.Block(List(Term.Function(List(param), b))) =>
-              s"${param.syntax} => (${b.syntax}).toOption"
+            case Term.Block(List(Term.Function.After_4_6_0(
+              Term.ParamClause(List(_), _), b))) =>
+              Patch.addRight(b, ".toOption")
 
             case _ =>
-              body.syntax
+              Patch.empty
           }
 
           val pd = transformer(doc)(d)
 
-          if (pd.nonEmpty) {
-            (pd + Patch.replaceTree(
-              v, s".getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")).atomic
-          } else {
-            Patch.replaceTree(
-              v, s"${d.syntax}.getAsOpt[${t.syntax}](${f.syntax}).flatMap { $b }")
-          }
+          (pd + Patch.replaceTree(getAs, "getAsOpt") +
+            Patch.replaceTree(map, "flatMap") + bd).atomic
         }
 
-        case getAs @ Term.Apply(Term.ApplyType(Term.Select(
-          d, Term.Name("getAs")), List(t)), List(nme)) if (
+        case Term.ApplyType.After_4_6_0(Term.Select(
+          d, getAs @ Term.Name("getAs")), Type.ArgClause(List(t))) if (
           t != "BSONNumberLike" && t != "BSONBooleanLike" &&
           getAs.symbol.info.exists { i =>
             val s = i.toString
@@ -1281,26 +1297,35 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           val pd = transformer(doc)(d)
 
           if (pd.nonEmpty) {
-            (pd + Patch.replaceTree(getAs, s".getAsOpt[${t}]($nme)")).atomic
+            (Patch.replaceTree(getAs, "getAsOpt") + pd).atomic
           } else {
-            Patch.replaceTree(getAs, s"${d.syntax}.getAsOpt[${t}]($nme)")
+            Patch.replaceTree(getAs, "getAsOpt")
           }
         }
 
-        case u @ Term.Apply(
+        case u @ Term.Apply.After_4_6_0(
           Term.Select(x, Term.Name("getUnflattenedTry")),
-          List(f)
+          Term.ArgClause(List(f), _)
           ) if (x.symbol.info.exists(_.signature.toString == "BSONDocument")) =>
           Patch.replaceTree(u, s"${x.syntax}.getAsUnflattenedTry[reactivemongo.api.bson.BSONValue]($f)")
 
-        case t @ Term.ApplyInfix(
-          d, Term.Name(":~"), List(), List(arg)) if (
+        case t @ Term.ApplyInfix.After_4_6_0(
+          d, Term.Name(":~"), Type.ArgClause(Nil),
+          arg @ Term.ArgClause(List(_), _)) if (
           t.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONDocument")) =>
           Patch.replaceTree(t, s"(${d.syntax} ++ ${arg.syntax})")
 
-        case t @ Term.ApplyInfix(
-          arg, Term.Name("~:"), List(), List(d)) if (
+        case t @ Term.ApplyInfix.After_4_6_0(
+          arg, Term.Name("~:"), Type.ArgClause(Nil),
+          Term.ArgClause(List(d @ Term.Name(_)), _)) if (
+          t.symbol.info.exists(
+            _.toString startsWith "reactivemongo/bson/BSONDocument")) =>
+          Patch.replaceTree(t, s"(BSONDocument(${arg.syntax}) ++ ${d.syntax})")
+
+        case t @ Term.ApplyInfix.After_4_6_0(
+          arg, Term.Name("~:"), Type.ArgClause(Nil),
+          d @ Term.ArgClause(List(_), _)) if (
           t.symbol.info.exists(
             _.toString startsWith "reactivemongo/bson/BSONDocument")) =>
           Patch.replaceTree(t, s"(BSONDocument(${arg.syntax}) ++ ${d.syntax})")
@@ -1381,7 +1406,8 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
       }
 
       {
-        case t @ Term.Apply(call, List(a, b, _, c)) if (t.symbol.info.exists(
+        case t @ Term.Apply.After_4_6_0(
+          call, Term.ArgClause(List(a, b, _, c), _)) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) => {
 
           val basePatch = Patch.replaceTree(
@@ -1396,10 +1422,10 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           }
         }
 
-        case t @ Term.Apply(Term.ApplyType(Term.Select(
-          fs, Term.Name("find")), List(_, _)), List(id)) if (
-          t.symbol.info.exists(
-            _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) =>
+        case t @ Term.Apply.After_4_6_0(Term.ApplyType.After_4_6_0(Term.Select(
+          fs, Term.Name("find")), Type.ArgClause(List(_, _))),
+          Term.ArgClause(List(id), _)) if (t.symbol.info.exists(
+          _.toString startsWith "reactivemongo/api/gridfs/GridFS#find")) =>
           Patch.replaceTree(t, s"${fs.syntax}.find[reactivemongo.api.bson.BSONDocument, reactivemongo.api.bson.BSONValue](${id.syntax})")
 
         // ---
@@ -1412,22 +1438,25 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
         // ---
 
-        case gridfsRes @ Term.Apply(Term.ApplyType(
-          GridFSTermName(), List(_)), List(Term.Name(db))) =>
+        case gridfsRes @ Term.Apply.After_4_6_0(
+          Term.ApplyType.After_4_6_0(GridFSTermName(), Type.ArgClause(List(_))),
+          Term.ArgClause(List(Term.Name(db)), _)) =>
           Patch.replaceTree(gridfsRes, s"${db}.gridfs")
 
-        case gridfsRes @ Term.Apply(
-          Term.ApplyType(
+        case gridfsRes @ Term.Apply.After_4_6_0(
+          Term.ApplyType.After_4_6_0(
             GridFSTermName(),
-            List(Type.Singleton(Term.Name("BSONSerializationPack")))
+            Type.ArgClause(
+              List(Type.Singleton(Term.Name("BSONSerializationPack"))))
             ),
-          List(Term.Name(db), prefix)
+          Term.ArgClause(List(Term.Name(db), prefix), _)
           ) =>
           Patch.replaceTree(gridfsRes, s"${db}.gridfs($prefix)")
 
         // ---
 
-        case readFileTpe @ Type.Apply(ReadFileTypeLike(rf), List(_, idTpe)) => {
+        case readFileTpe @ Type.Apply.After_4_6_0(ReadFileTypeLike(rf),
+          Type.ArgClause(List(_, idTpe))) => {
           val it: String = {
             if (idTpe.symbol.info.exists(
               _.toString startsWith "play/api/libs/json/JsString")) {
@@ -1442,29 +1471,32 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
             s"${rf}[${it}, reactivemongo.api.bson.BSONDocument]")
         }
 
-        case save @ Term.Apply(
-          Term.Apply(
+        case save @ Term.Apply.After_4_6_0(
+          Term.Apply.After_4_6_0(
             Term.Select(g, Term.Name("save" | "saveWithMD5")),
-            List(Term.Name(_), Term.Name(file), Term.Name(chunkSize))
+            Term.ArgClause(
+              List(Term.Name(_), Term.Name(file), Term.Name(chunkSize)), _)
             ),
-          List(Term.Name(_), Term.Name(ec), Term.Name(_), Term.Name(_))
+          Term.ArgClause(
+            List(Term.Name(_), Term.Name(ec), Term.Name(_), Term.Name(_)), _)
           ) if (save.symbol.owner.
           toString == "reactivemongo/api/gridfs/GridFS#") =>
           Patch.addRight(save, s" // Consider: ${g}.writeFromInputStream(${file}, _streamNotEnumerator, $chunkSize)($ec)")
 
-        case iteratee @ Term.Apply(
-          Term.Apply(
+        case iteratee @ Term.Apply.After_4_6_0(
+          Term.Apply.After_4_6_0(
             Term.Select(g, Term.Name("iteratee" | "iterateeWithMD5")),
-            List(Term.Name(_), Term.Name(_))
+            Term.ArgClause(List(Term.Name(_), Term.Name(_)), _)
             ),
-          List(Term.Name(_), Term.Name(_), Term.Name(_), Term.Name(_))
+          Term.ArgClause(
+            List(Term.Name(_), Term.Name(_), Term.Name(_), Term.Name(_)), _)
           ) if (iteratee.symbol.owner.
           toString == "reactivemongo/api/gridfs/GridFS#") =>
           Patch.addRight(iteratee, s" // Consider: ${g}.readToOutputStream or GridFS support in streaming modules")
 
-        case gridfsRm @ Term.Apply(
+        case gridfsRm @ Term.Apply.After_4_6_0(
           Term.Select(Term.Name(gt), Term.Name("remove")),
-          List(Term.Name(ref))
+          Term.ArgClause(List(Term.Name(ref)), _)
           ) if (gridfsRm.symbol.owner.
           toString == "reactivemongo/api/gridfs/GridFS#") =>
           Patch.replaceTree(gridfsRm, s"${gt}.remove(${ref}.id)")
@@ -1473,7 +1505,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
           _.toString startsWith "reactivemongo/api/gridfs/")) =>
           Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.GridFS.fileToSave */")
 
-        case t @ Type.Apply(Type.Name(
+        case t @ Type.Apply.After_4_6_0(Type.Name(
           "BasicMetadata" | "CustomMetadata"), _) if (t.symbol.info.exists(
           _.toString startsWith "reactivemongo/api/gridfs/")) =>
           Patch.replaceTree(t, "Unit /* Consider: reactivemongo.api.gridfs.ReadFile */")

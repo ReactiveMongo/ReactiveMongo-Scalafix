@@ -21,21 +21,21 @@ import reactivemongo.api.collections.bson.BSONCollection
 object Bson {
   def defaultHandlers = DefaultBSONHandlers.BSONBinaryHandler
 
-  def afterWrite1[T](implicit w: BSONWriter[T, BSONString]): BSONWriter[T, BSONDocument] = w.afterWrite[BSONDocument] { bson =>
+  def afterWrite1[T](implicit w1: BSONWriter[T, BSONString]): BSONWriter[T, BSONDocument] = w1.afterWrite[BSONDocument] { bson =>
     BSONDocument(f"$$string" -> bson) :~ ("_hash" -> bson.hashCode)
   }
 
-  def afterWrite2[T](implicit w: BSONWriter[T, _ <: BSONValue]) =
-    w.afterWrite { bson =>
+  def afterWrite2[T](implicit w2: BSONWriter[T, _ <: BSONValue]) =
+    w2.afterWrite { bson =>
       BSONDocument(f"$$value" -> bson)
     }
 
-  def afterWrite3[T](implicit w: BSONDocumentWriter[T]) =
-    w.afterWrite { doc =>
+  def afterWrite3[T](implicit w3: BSONDocumentWriter[T]) =
+    w3.afterWrite { doc =>
       doc :~ ("_hash" -> doc.hashCode)
     }
 
-  def afterWrite4[T](implicit w: BSONWriter[T, _ <: BSONValue]): BSONWriter[T, BSONDocument] = w.afterWrite[BSONDocument] {
+  def afterWrite4[T](implicit w4: BSONWriter[T, _ <: BSONValue]): BSONWriter[T, BSONDocument] = w4.afterWrite[BSONDocument] {
     case str @ BSONString(v) =>
       BSONDocument(f"$$string" -> str) :~ ("_len" -> v.size)
 
@@ -53,11 +53,11 @@ object Bson {
 
   def oid(): BSONObjectID = generateId()
 
-  def bar(doc: reactivemongo.bson.BSONDocument): Option[Int] =
-    (("foo" -> 0) ~: doc).getAs[BSONNumberLike]("_i").map(_.toInt)
+  def bar(barDoc: reactivemongo.bson.BSONDocument): Option[Int] =
+    (("foo" -> 0) ~: barDoc).getAs[BSONNumberLike]("_i").map(_.toInt)
 
-  def lorem(doc: BSONDocument) =
-    (doc :~ ("foo" -> 1)).getAs[String]("...")
+  def lorem(loremDoc: BSONDocument) =
+    (loremDoc :~ ("foo" -> 1)).getAs[String]("...")
 
   def ipsum(doc: BSONDocument) = doc.getUnflattenedTry("...")
 
