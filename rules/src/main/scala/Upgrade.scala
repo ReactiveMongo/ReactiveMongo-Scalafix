@@ -477,9 +477,9 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
 
           args match {
             case document :: Nil => document match {
-              case Term.Assign(_, doc) =>
+              case Term.Assign(_, d) =>
                 Patch.replaceTree(
-                  t, s"${c.syntax}.insert.one${appTArg}($doc)")
+                  t, s"${c.syntax}.insert.one${appTArg}($d)")
 
               case _ =>
                 Patch.replaceTree(
@@ -501,7 +501,7 @@ final class Upgrade extends SemanticRule("ReactiveMongoUpgrade") { self =>
               }
 
               val docArg = document match {
-                case Term.Assign(_, doc) => doc
+                case Term.Assign(_, d) => d
                 case _ => document
               }
 
