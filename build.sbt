@@ -4,11 +4,19 @@ name := "reactivemongo-scalafix-root"
 
 import _root_.scalafix.sbt.{ BuildInfo => SF }
 
-ThisBuild / resolvers ++= {
-  Resolver.typesafeRepo("releases") +:
-  Resolver.sonatypeOssRepos("staging") ++:
-  Resolver.sonatypeOssRepos("snapshots")
-}
+credentials ++= Seq(
+  Credentials(
+    "", // Empty realm credential - this one is actually used by Coursier!
+    "central.sonatype.com",
+    Publish.env("SONATYPE_USER"),
+    Publish.env("SONATYPE_PASS")
+  )
+)
+
+ThisBuild / resolvers ++= Seq(
+  "Central Testing repository" at "https://central.sonatype.com/api/v1/publisher/deployments/download",
+  Resolver.typesafeRepo("releases")
+)
 
 addCompilerPlugin(scalafixSemanticdb)
 

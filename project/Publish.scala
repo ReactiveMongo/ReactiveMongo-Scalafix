@@ -34,5 +34,5 @@ object Publish extends AutoPlugin {
         </developers>)
   )
 
-  @inline private def env(n: String): String = sys.env.get(n).getOrElse(n)
+  @inline def env(n: String): String = sys.env.get(n).getOrElse(n)
 }
