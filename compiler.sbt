@@ -1,6 +1,6 @@
-ThisBuild / scalaVersion := "2.12.19"
+ThisBuild / scalaVersion := "2.12.20"
 
-ThisBuild / crossScalaVersions := Seq(scalaVersion.value, "2.13.14")
+ThisBuild / crossScalaVersions := Seq(scalaVersion.value, "2.13.16")
 
 ThisBuild / crossVersion := CrossVersion.binary
 
@@ -62,7 +62,7 @@ Test / console / scalacOptions ~= {
 }
 
 ThisBuild / libraryDependencies ++= {
-  val silencerVersion = "1.7.17"
+  val silencerVersion = "1.7.19"
 
   Seq(
     compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).
